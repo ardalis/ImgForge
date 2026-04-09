@@ -7,7 +7,7 @@ public class ImageGenerator(TemplateRenderer renderer)
     public async Task<string> GenerateAsync(GenerateOptions opts)
     {
         var html = renderer.Render(opts);
-        using var playwright = await Playwright.CreateAsync();
+        using var playwright = await CreatePlaywrightAsync();
         await using var browser = await playwright.Chromium.LaunchAsync();
         var page = await browser.NewPageAsync();
         await page.SetViewportSizeAsync(opts.Width, opts.Height);
@@ -29,5 +29,21 @@ public class ImageGenerator(TemplateRenderer renderer)
         }
 
         return opts.Out;
+    }
+
+    private static async Task<IPlaywright> CreatePlaywrightAsync()
+    {
+        try
+        {
+            return await Playwright.CreateAsync();
+        }
+        catch (Exception ex) when (ex.Message.Contains("Driver not found") || ex.Message.Contains("node.exe"))
+        {
+            Console.Error.WriteLine("Playwright driver not found. Running 'playwright install chromium'...");
+            var exitCode = Microsoft.Playwright.Program.Main(["install", "chromium"]);
+            if (exitCode != 0)
+                throw new InvalidOperationException($"Playwright install failed with exit code {exitCode}.");
+            return await Playwright.CreateAsync();
+        }
     }
 }

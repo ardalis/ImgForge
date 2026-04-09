@@ -5,10 +5,10 @@
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>imgforge</ToolCommandName>
     <PackageId>ImgForge</PackageId>
-    <Version>0.1.0</Version>
+    <Version>0.1.1</Version>
     <Description>Generate blog and YouTube thumbnail images from HTML templates.</Description>
     <Authors>ardalis</Authors>
-    <PackageReleaseNotes>Initial release.</PackageReleaseNotes>
+    <PackageReleaseNotes>Auto-install Playwright Chromium driver on first run if not found.</PackageReleaseNotes>
     <NoWarn>NU5111</NoWarn>
     <RepositoryUrl>https://github.com/ardalis/ImgForge</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
