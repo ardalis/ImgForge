@@ -3,7 +3,8 @@
     "allow": [
       "WebFetch(domain:chatgpt.com)",
       "Read(//c/Users/steve/.claude/agents/**)",
-      "Read(//c/Users/steve/.claude/**)"
+      "Read(//c/Users/steve/.claude/**)",
+      "Bash(dotnet pack:*)"
     ]
   }
 }

@@ -10,9 +10,16 @@
     <Authors>ardalis</Authors>
     <PackageReleaseNotes>Initial release.</PackageReleaseNotes>
     <NoWarn>NU5111</NoWarn>
+    <RepositoryUrl>https://github.com/ardalis/ImgForge</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageTags>dotnet-tool;image;thumbnail;youtube;blog;html;template;playwright</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/ardalis/ImgForge</PackageProjectUrl>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
 
   <ItemGroup>
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
     <PackageReference Include="System.CommandLine" />
     <ProjectReference Include="..\ImgForge.Core\ImgForge.Core.csproj" />
   </ItemGroup>
