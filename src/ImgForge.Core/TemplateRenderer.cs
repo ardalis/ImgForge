@@ -15,7 +15,9 @@ public class TemplateRenderer
     public string Render(GenerateOptions opts)
     {
         var (templateSource, templateDir) = LoadTemplateSource(opts.Template);
-        var bg = ResolveLocalPath(opts.Background);
+        var bg = opts.Background?.Equals("random", StringComparison.OrdinalIgnoreCase) == true
+            ? $"https://picsum.photos/{opts.Width}/{opts.Height}"
+            : ResolveLocalPath(opts.Background);
 
         var template = Template.ParseLiquid(templateSource);
 

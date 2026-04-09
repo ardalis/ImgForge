@@ -5,10 +5,10 @@
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>imgforge</ToolCommandName>
     <PackageId>ImgForge</PackageId>
-    <Version>0.1.3</Version>
+    <Version>0.1.4</Version>
     <Description>Generate blog and YouTube thumbnail images from HTML templates.</Description>
     <Authors>ardalis</Authors>
-    <PackageReleaseNotes>Fix Chromium sandbox error on Linux (GitHub Actions/CI) by passing --no-sandbox when running on Linux.</PackageReleaseNotes>
+    <PackageReleaseNotes>Add --bg random support: uses a random picsum.photos image sized to match the output dimensions.</PackageReleaseNotes>
     <NoWarn>NU5111</NoWarn>
     <RepositoryUrl>https://github.com/ardalis/ImgForge</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
