@@ -4,7 +4,8 @@
       "WebFetch(domain:chatgpt.com)",
       "Read(//c/Users/steve/.claude/agents/**)",
       "Read(//c/Users/steve/.claude/**)",
-      "Bash(dotnet pack:*)"
+      "Bash(dotnet pack:*)",
+      "Bash(gh release:*)"
     ]
   }
 }
