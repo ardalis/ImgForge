@@ -418,6 +418,6 @@ FodyWeavers.xsd
 *.msp
 
 # ImgForge generated output images
-*.png
+output/
 nupkg/
 

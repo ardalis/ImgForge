@@ -90,7 +90,7 @@ public class TemplateRendererTests
             );
 
             var result = _renderer.Render(opts);
-            Assert.StartsWith("file:///", result.Trim());
+            Assert.Contains("file:///", result);
         }
         finally
         {
@@ -149,5 +149,99 @@ public class TemplateRendererTests
         {
             File.Delete(tempTemplate);
         }
+    }
+
+    [Fact]
+    public void Render_FileTemplate_InjectsBaseTagPointingToTemplateDir()
+    {
+        var tempTemplate = Path.GetTempFileName() + ".html";
+        try
+        {
+            File.WriteAllText(tempTemplate, "<html><head></head><body>{{ title }}</body></html>");
+            var expectedDir = Path.GetDirectoryName(Path.GetFullPath(tempTemplate))!
+                .Replace('\\', '/');
+
+            var opts = new GenerateOptions(
+                Template: tempTemplate,
+                Title: "Test",
+                Background: null,
+                Overlays: [],
+                Out: "out.png"
+            );
+
+            var result = _renderer.Render(opts);
+            Assert.Contains("<base href=\"file:///" + expectedDir + "/\"", result);
+        }
+        finally
+        {
+            File.Delete(tempTemplate);
+        }
+    }
+
+    [Fact]
+    public void Render_TemplateFolder_LoadsTemplateHtmlAndInjectsBaseTag()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        try
+        {
+            var templateFile = Path.Combine(tempDir, "template.html");
+            File.WriteAllText(templateFile, "<html><head></head><body>{{ title }}</body></html>");
+
+            var opts = new GenerateOptions(
+                Template: tempDir,
+                Title: "Folder Template",
+                Background: null,
+                Overlays: [],
+                Out: "out.png"
+            );
+
+            var result = _renderer.Render(opts);
+            Assert.Contains("Folder Template", result);
+            var expectedDir = tempDir.Replace('\\', '/');
+            Assert.Contains("<base href=\"file:///" + expectedDir + "/\"", result);
+        }
+        finally
+        {
+            Directory.Delete(tempDir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Render_TemplateFolder_MissingTemplateHtml_Throws()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        try
+        {
+            var opts = new GenerateOptions(
+                Template: tempDir,
+                Title: "T",
+                Background: null,
+                Overlays: [],
+                Out: "out.png"
+            );
+
+            Assert.Throws<FileNotFoundException>(() => _renderer.Render(opts));
+        }
+        finally
+        {
+            Directory.Delete(tempDir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Render_BuiltInTemplate_DoesNotInjectBaseTag()
+    {
+        var opts = new GenerateOptions(
+            Template: "blog",
+            Title: "No Base Tag",
+            Background: null,
+            Overlays: [],
+            Out: "out.png"
+        );
+
+        var result = _renderer.Render(opts);
+        Assert.DoesNotContain("<base href=", result);
     }
 }

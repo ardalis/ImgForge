@@ -14,7 +14,7 @@ public class TemplateRenderer
 
     public string Render(GenerateOptions opts)
     {
-        var templateSource = LoadTemplateSource(opts.Template);
+        var (templateSource, templateDir) = LoadTemplateSource(opts.Template);
         var bg = ResolveLocalPath(opts.Background);
 
         var template = Template.ParseLiquid(templateSource);
@@ -40,11 +40,39 @@ public class TemplateRenderer
 
         var model = new RenderModel(opts.Title, bg ?? string.Empty, opts.Width, opts.Height, overlays, headshot, vars);
 
-        return template.Render(model, member => member.Name);
+        var rendered = template.Render(model, member => member.Name);
+
+        if (templateDir is not null)
+            rendered = InjectBaseTag(rendered, templateDir);
+
+        return rendered;
     }
 
-    private static string LoadTemplateSource(string template)
+    /// <summary>
+    /// Loads a template and returns its HTML source plus the directory it lives in
+    /// (or null for built-in embedded resources, which have no file-system directory).
+    /// </summary>
+    /// <remarks>
+    /// Three template forms are supported:
+    /// <list type="bullet">
+    ///   <item>Built-in name (e.g. "blog") — embedded resource, no base directory.</item>
+    ///   <item>Path to a .html file — file is read directly; base dir is the file's parent directory.</item>
+    ///   <item>Path to a directory — must contain a "template.html" file; base dir is the directory itself.</item>
+    /// </list>
+    /// </remarks>
+    private static (string source, string? templateDir) LoadTemplateSource(string template)
     {
+        // Template folder: a directory containing template.html
+        if (Directory.Exists(template))
+        {
+            var templateFile = Path.Combine(template, "template.html");
+            if (!File.Exists(templateFile))
+                throw new FileNotFoundException(
+                    $"Template folder '{template}' does not contain a 'template.html' file.",
+                    templateFile);
+            return (File.ReadAllText(templateFile), Path.GetFullPath(template));
+        }
+
         bool isBuiltIn = !template.Contains('/') &&
                          !template.Contains('\\') &&
                          !template.EndsWith(".html", StringComparison.OrdinalIgnoreCase);
@@ -56,10 +84,34 @@ public class TemplateRenderer
             using var stream = assembly.GetManifestResourceStream(resourceName)
                 ?? throw new FileNotFoundException($"Built-in template '{template}' not found.", resourceName);
             using var reader = new StreamReader(stream);
-            return reader.ReadToEnd();
+            return (reader.ReadToEnd(), null);
         }
 
-        return File.ReadAllText(template);
+        var dir = Path.GetDirectoryName(Path.GetFullPath(template));
+        return (File.ReadAllText(template), dir);
+    }
+
+    /// <summary>
+    /// Injects a &lt;base&gt; tag into the HTML so that relative URLs in the template
+    /// (e.g. a watermark image sitting next to template.html) resolve against the
+    /// template's directory rather than the temporary file location used by the browser.
+    /// </summary>
+    private static string InjectBaseTag(string html, string templateDir)
+    {
+        var basePath = templateDir.Replace('\\', '/');
+        if (!basePath.EndsWith('/'))
+            basePath += '/';
+        var baseTag = $"<base href=\"file:///{basePath}\">";
+
+        var headIndex = html.IndexOf("<head>", StringComparison.OrdinalIgnoreCase);
+        if (headIndex >= 0)
+        {
+            var insertPos = headIndex + "<head>".Length;
+            return html.Insert(insertPos, "\n  " + baseTag);
+        }
+
+        // No <head> element — prepend the tag so it still takes effect.
+        return baseTag + "\n" + html;
     }
 
     private static string? ResolveLocalPath(string? path)
