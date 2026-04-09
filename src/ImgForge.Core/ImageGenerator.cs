@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using PuppeteerSharp;
 
 namespace ImgForge.Core;
@@ -10,7 +11,12 @@ public class ImageGenerator(TemplateRenderer renderer)
 
         await EnsureBrowserAsync();
 
-        await using var browser = await Puppeteer.LaunchAsync(new LaunchOptions { Headless = true });
+        var launchOptions = new LaunchOptions
+        {
+            Headless = true,
+            Args = RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ? ["--no-sandbox"] : []
+        };
+        await using var browser = await Puppeteer.LaunchAsync(launchOptions);
         var page = await browser.NewPageAsync();
         await page.SetViewportAsync(new ViewPortOptions { Width = opts.Width, Height = opts.Height });
 
