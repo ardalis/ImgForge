@@ -4,9 +4,9 @@
   <meta charset="utf-8" />
   <style>
     /*
-     * Podcast Episode Art — 3000×3000
-     * Episode title is the hero. Show name anchors the bottom.
-     * Designed to read clearly at thumbnail size in podcast apps.
+     * Podcast Episode Art — scales from 1200×630 up to 3000×3000.
+     * All sizing uses vw so layout proportions hold at any --width.
+     * Baseline: 3000px wide → 1vw = 30px.
      */
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -46,16 +46,16 @@
       position: absolute;
       inset: 0;
       background-image: radial-gradient(circle, rgba(255,255,255,0.04) 1px, transparent 1px);
-      background-size: 60px 60px;
+      background-size: 2vw 2vw;
     }
 
     /* Amber accent bar on the left */
     .accent-bar {
       position: absolute;
-      top: 240px;
-      bottom: 240px;
+      top: 8vw;
+      bottom: 8vw;
       left: 0;
-      width: 28px;
+      width: clamp(6px, 0.93vw, 28px);
       background: linear-gradient(to bottom, #f59e0b, #d97706);
       border-radius: 0 6px 6px 0;
     }
@@ -66,49 +66,47 @@
       display: flex;
       flex-direction: column;
       justify-content: center;
-      padding: 240px 280px 240px 320px;
+      padding: 8vw 9.3vw 8vw 10.7vw;
+      {% if headshot %}max-width: 58%;{% endif %}
     }
 
     .episode-label {
-      font-size: 56px;
+      font-size: clamp(14px, 1.87vw, 56px);
       font-weight: 600;
-      letter-spacing: 8px;
+      letter-spacing: 0.27vw;
       text-transform: uppercase;
       color: #f59e0b;
-      margin-bottom: 80px;
+      margin-bottom: 2.67vw;
     }
 
     h1 {
-      font-size: 180px;
+      font-size: clamp(28px, 6vw, 180px);
       font-weight: 900;
       line-height: 1.05;
-      letter-spacing: -4px;
+      letter-spacing: -0.02em;
       text-shadow: 0 8px 48px rgba(0,0,0,0.9);
-      margin-bottom: 120px;
-      /* Allow up to ~3 lines at this size */
-      max-height: 580px;
-      overflow: hidden;
+      margin-bottom: 4vw;
     }
 
     .divider {
-      width: 200px;
-      height: 6px;
+      width: 6.67vw;
+      height: clamp(2px, 0.2vw, 6px);
       background: #f59e0b;
       border-radius: 3px;
-      margin-bottom: 80px;
+      margin-bottom: 2.67vw;
     }
 
     /* Overlay images (show logo / guest avatar) */
     .overlay-row {
       display: flex;
       align-items: center;
-      gap: 48px;
-      margin-bottom: 80px;
+      gap: 1.6vw;
+      margin-bottom: 2.67vw;
     }
 
     .overlay-row img {
-      max-height: 200px;
-      max-width: 400px;
+      max-height: 6.67vw;
+      max-width: 13.33vw;
       object-fit: contain;
       filter: drop-shadow(0 4px 16px rgba(0,0,0,0.7));
     }
@@ -119,34 +117,67 @@
       bottom: 0;
       left: 0;
       right: 0;
-      height: 220px;
+      height: clamp(55px, 7.33vw, 220px);
       background: rgba(0,0,0,0.65);
-      border-top: 6px solid #f59e0b;
+      border-top: clamp(2px, 0.2vw, 6px) solid #f59e0b;
       display: flex;
       align-items: center;
-      padding: 0 280px;
-      gap: 32px;
+      padding: 0 9.3vw;
+      gap: 1.07vw;
     }
 
     .show-footer .show-icon {
-      font-size: 72px;
+      font-size: clamp(18px, 2.4vw, 72px);
     }
 
     .show-footer .show-name {
-      font-size: 72px;
+      font-size: clamp(18px, 2.4vw, 72px);
       font-weight: 700;
-      letter-spacing: 1px;
+      letter-spacing: 0.03vw;
       color: rgba(255,255,255,0.90);
     }
 
     .show-footer .podcast-tag {
       margin-left: auto;
-      font-size: 52px;
+      font-size: clamp(12px, 1.73vw, 52px);
       font-weight: 600;
-      letter-spacing: 8px;
+      letter-spacing: 0.27vw;
       text-transform: uppercase;
       color: rgba(255,255,255,0.45);
     }
+
+    /* Guest headshot — circular with optional colour filter */
+    {% if headshot %}
+    {% assign hs = width | divided_by: 4 %}
+    {% assign hs_right = width | divided_by: 14 %}
+    .headshot-wrapper {
+      position: absolute;
+      right: {{ hs_right }}px;
+      top: 50%;
+      transform: translateY(-60%);
+      width: {{ hs }}px;
+      height: {{ hs }}px;
+    }
+
+    .headshot-ring {
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      overflow: hidden;
+      border: clamp(4px, 0.47vw, 14px) solid rgba(100, 180, 255, 0.55);
+      box-shadow:
+        0 0 80px rgba(60, 140, 255, 0.35),
+        0 0 180px rgba(60, 140, 255, 0.15),
+        inset 0 0 40px rgba(0, 0, 0, 0.4);
+    }
+
+    .headshot-ring img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    {% endif %}
   </style>
 </head>
 <body>
@@ -155,7 +186,17 @@
   <div class="accent-bar"></div>
 
   <div class="content">
-    <div class="episode-label">New Episode</div>
+    <div class="episode-label">
+      {%- if vars.season != nil and vars.episode != nil -%}
+        Season {{ vars.season }}: Episode {{ vars.episode }}
+      {%- elsif vars.episode != nil -%}
+        Episode {{ vars.episode }}
+      {%- elsif vars.season != nil -%}
+        Season {{ vars.season }}
+      {%- else -%}
+        New Episode
+      {%- endif -%}
+    </div>
     <h1>{{ title }}</h1>
     <div class="divider"></div>
 
@@ -170,8 +211,16 @@
 
   <div class="show-footer">
     <span class="show-icon">🎙️</span>
-    <span class="show-name">{{ title }}</span>
+    <span class="show-name">{% if vars.show %}{{ vars.show }}{% else %}{{ title }}{% endif %}</span>
     <span class="podcast-tag">Podcast</span>
   </div>
+
+  {% if headshot %}
+  <div class="headshot-wrapper">
+    <div class="headshot-ring">
+      <img src="{{ headshot.src }}" style="filter: {{ headshot.filter_css }};" />
+    </div>
+  </div>
+  {% endif %}
 </body>
 </html>

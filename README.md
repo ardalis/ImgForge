@@ -44,10 +44,26 @@ imgforge generate \
   --title "Modular Monoliths Done Right" \
   --bg ./images/cover.jpg \      # local path or HTTP(S) URL; optional
   --overlay ./logo.png \         # optional; repeat for multiple overlays
+  --headshot ./guest.jpg \       # optional guest headshot; placed in a styled circle
+  --headshot-filter blue-mono \  # built-in: blue-mono (default), mono, none — or a raw CSS filter string
+  --format podcast-episode \     # sets width/height from a named preset (see formats below)
   --out og.png \
-  --width 1200 \                 # default: 1200
-  --height 630                   # default: 630
+  --width 1200 \                 # explicit width — overrides --format; prompted if neither is given
+  --height 630                   # explicit height — overrides --format; prompted if neither is given
 ```
+
+### Format presets
+
+Use `--format <name>` instead of `--width`/`--height`. Explicit dimensions always override the preset.
+If neither `--format` nor explicit dimensions are provided, the tool prompts you interactively.
+
+| `--format` value | Width | Height | Use case |
+|---|---|---|---|
+| `youtube` | 1280 | 720 | YouTube video thumbnail |
+| `blog` / `og` | 1200 | 630 | Blog post / Open Graph social card |
+| `github` | 1280 | 640 | GitHub repository social preview |
+| `podcast-show` | 3000 | 3000 | Podcast show art |
+| `podcast-episode` | 3000 | 3000 | Podcast episode art |
 
 ## Image Dimension Reference
 
@@ -64,20 +80,35 @@ Ideal dimensions vary by platform and use case. Use `--width` and `--height` to 
 ### Quick reference commands
 
 ```bash
-# YouTube thumbnail
-imgforge generate --template templates/youtube-bold.html --title "My Video Title" --bg ./bg.jpg --out thumb.png --width 1280 --height 720
+# YouTube thumbnail (using --format preset)
+imgforge generate --template templates/youtube-bold.html --title "My Video Title" --bg ./bg.jpg --out thumb.png --format youtube
+
+# YouTube thumbnail with guest headshot (blue monochrome filter)
+imgforge generate --template templates/youtube-bold.html --title "Building Better APIs" \
+  --headshot ./guest.jpg --out thumb.png --format youtube
 
 # Blog / Open Graph card
-imgforge generate --template templates/blog-gradient.html --title "My Post Title" --bg ./cover.jpg --out og.png --width 1200 --height 630
+imgforge generate --template templates/blog-gradient.html --title "My Post Title" --bg ./cover.jpg --out og.png --format blog
 
 # GitHub social preview
-imgforge generate --template templates/github-social.html --title "my-repo" --bg ./cover.jpg --out social-preview.png --width 1280 --height 640
+imgforge generate --template templates/github-social.html --title "my-repo" --bg ./cover.jpg --out social-preview.png --format github
 
 # Podcast show art
-imgforge generate --template templates/podcast-show.html --title "My Podcast" --out podcast-show.png --width 3000 --height 3000
+imgforge generate --template templates/podcast-show.html --title "My Podcast" --out podcast-show.png --format podcast-show
 
-# Podcast episode art
-imgforge generate --template templates/podcast-episode.html --title "My Episode Title" --out podcast-episode.png --width 3000 --height 3000
+# Podcast episode art with guest headshot, season/episode labels, and named show in footer
+imgforge generate --template templates/podcast-episode.html \
+  --title "Build vs Buy with guest Ardalis" \
+  --headshot ./guest.jpg --headshot-filter blue-mono \
+  --var season=3 --var episode=42 --var show="It Depends by NimblePros" \
+  --out podcast-episode.png --format podcast-episode
+
+# Podcast episode art — greyscale headshot instead of blue tint
+imgforge generate --template templates/podcast-episode.html --title "My Episode Title" \
+  --headshot ./guest.jpg --headshot-filter mono --out podcast-episode.png --format podcast-episode
+
+# Omit --format and --width/--height to be prompted interactively
+imgforge generate --template templates/podcast-episode.html --title "My Episode Title" --out out.png
 ```
 
 ## Built-in Templates
@@ -112,6 +143,18 @@ Any `.html` file can be used as a template. Scriban Liquid syntax is supported f
 | `width` | `int` | Viewport width in pixels |
 | `height` | `int` | Viewport height in pixels |
 | `overlays` | array | List of `{ src, style }` overlay image objects |
+| `headshot` | object or `null` | Guest headshot — exposes `headshot.src` (file URI) and `headshot.filter_css` (CSS filter string). `null` when `--headshot` is not supplied. |
+
+### Headshot filters
+
+Pass a name to `--headshot-filter` or supply any raw [CSS `filter`](https://developer.mozilla.org/en-US/docs/Web/CSS/filter) string.
+
+| Name | CSS applied | Effect |
+|---|---|---|
+| `blue-mono` *(default)* | `grayscale(100%) sepia(100%) hue-rotate(190deg) saturate(300%) brightness(1.15)` | Light-blue monochrome — "black and white but in shades of blue" |
+| `mono` | `grayscale(100%)` | True greyscale |
+| `none` | `none` | No filter; original colours kept |
+| *(custom)* | *(your string)* | Any valid CSS filter string, e.g. `sepia(80%) hue-rotate(270deg)` |
 
 ## Build and Test
 

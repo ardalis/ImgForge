@@ -91,6 +91,39 @@
       object-fit: contain;
       filter: drop-shadow(0 2px 8px rgba(0,0,0,0.8));
     }
+
+    /* Guest headshot — circular with optional colour filter, centred in the right panel */
+    {% if headshot %}
+    {% assign hs = height | times: 72 | divided_by: 100 %}
+    {% assign hs_right = width | divided_by: 22 %}
+    .headshot-wrapper {
+      position: absolute;
+      right: {{ hs_right }}px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: {{ hs }}px;
+      height: {{ hs }}px;
+    }
+
+    .headshot-ring {
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      overflow: hidden;
+      border: 6px solid rgba(100, 180, 255, 0.55);
+      box-shadow:
+        0 0 40px rgba(60, 140, 255, 0.35),
+        0 0 90px rgba(60, 140, 255, 0.15),
+        inset 0 0 20px rgba(0, 0, 0, 0.4);
+    }
+
+    .headshot-ring img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    {% endif %}
   </style>
 </head>
 <body>
@@ -107,6 +140,14 @@
     {% for img in overlays %}
     <img src="{{ img.src }}" style="{{ img.style }}" />
     {% endfor %}
+  </div>
+  {% endif %}
+
+  {% if headshot %}
+  <div class="headshot-wrapper">
+    <div class="headshot-ring">
+      <img src="{{ headshot.src }}" style="filter: {{ headshot.filter_css }};" />
+    </div>
   </div>
   {% endif %}
 </body>

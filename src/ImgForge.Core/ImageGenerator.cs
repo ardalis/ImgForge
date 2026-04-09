@@ -11,8 +11,23 @@ public class ImageGenerator(TemplateRenderer renderer)
         await using var browser = await playwright.Chromium.LaunchAsync();
         var page = await browser.NewPageAsync();
         await page.SetViewportSizeAsync(opts.Width, opts.Height);
-        await page.SetContentAsync(html, new() { WaitUntil = WaitUntilState.NetworkIdle });
-        await page.ScreenshotAsync(new() { Path = opts.Out, FullPage = false });
+
+        // Write the rendered HTML to a temp file and navigate to it via file:///
+        // so Chromium can load local file:/// resources (images, etc.).
+        // SetContentAsync gives the page an about:blank origin which blocks file:/// URLs.
+        var tempHtml = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}.html");
+        try
+        {
+            await File.WriteAllTextAsync(tempHtml, html);
+            var fileUri = "file:///" + tempHtml.Replace('\\', '/');
+            await page.GotoAsync(fileUri, new() { WaitUntil = WaitUntilState.NetworkIdle });
+            await page.ScreenshotAsync(new() { Path = opts.Out, FullPage = false });
+        }
+        finally
+        {
+            if (File.Exists(tempHtml)) File.Delete(tempHtml);
+        }
+
         return opts.Out;
     }
 }

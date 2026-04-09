@@ -4,10 +4,18 @@ namespace ImgForge.Core;
 
 public class TemplateRenderer
 {
+    private static readonly IReadOnlyDictionary<string, string> FilterMap =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["blue-mono"] = "grayscale(100%) sepia(100%) hue-rotate(190deg) saturate(300%) brightness(1.15)",
+            ["mono"]      = "grayscale(100%)",
+            ["none"]      = "none"
+        };
+
     public string Render(GenerateOptions opts)
     {
         var templateSource = LoadTemplateSource(opts.Template);
-        var bg = ResolveBackground(opts.Background);
+        var bg = ResolveLocalPath(opts.Background);
 
         var template = Template.ParseLiquid(templateSource);
 
@@ -15,7 +23,22 @@ public class TemplateRenderer
             .Select(o => new OverlayModel(o.Src, o.Style))
             .ToList();
 
-        var model = new RenderModel(opts.Title, bg ?? string.Empty, opts.Width, opts.Height, overlays);
+        HeadshotModel? headshot = null;
+        if (opts.Headshot is not null)
+        {
+            var src = ResolveLocalPath(opts.Headshot.Src) ?? opts.Headshot.Src;
+            var filterCss = FilterMap.TryGetValue(opts.Headshot.Filter, out var css)
+                ? css
+                : opts.Headshot.Filter; // allow raw CSS filter strings
+            headshot = new HeadshotModel(src, filterCss);
+        }
+
+        var vars = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        if (opts.Vars is not null)
+            foreach (var (k, v) in opts.Vars)
+                vars[k] = v;
+
+        var model = new RenderModel(opts.Title, bg ?? string.Empty, opts.Width, opts.Height, overlays, headshot, vars);
 
         return template.Render(model, member => member.Name);
     }
@@ -39,29 +62,33 @@ public class TemplateRenderer
         return File.ReadAllText(template);
     }
 
-    private static string? ResolveBackground(string? background)
+    private static string? ResolveLocalPath(string? path)
     {
-        if (background is null)
+        if (path is null)
             return null;
 
-        if (background.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
-            background.StartsWith("https://", StringComparison.OrdinalIgnoreCase) ||
-            background.StartsWith("file:///", StringComparison.OrdinalIgnoreCase))
+        if (path.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+            path.StartsWith("https://", StringComparison.OrdinalIgnoreCase) ||
+            path.StartsWith("file:///", StringComparison.OrdinalIgnoreCase))
         {
-            return background;
+            return path;
         }
 
-        var fullPath = Path.GetFullPath(background);
+        var fullPath = Path.GetFullPath(path);
         return $"file:///{fullPath.Replace('\\', '/')}";
     }
 }
 
 internal record OverlayModel(string src, string style);
 
+internal record HeadshotModel(string src, string filter_css);
+
 internal record RenderModel(
     string title,
     string bg,
     int width,
     int height,
-    IReadOnlyList<OverlayModel> overlays
+    IReadOnlyList<OverlayModel> overlays,
+    HeadshotModel? headshot,
+    Dictionary<string, string> vars
 );
