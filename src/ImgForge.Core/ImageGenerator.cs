@@ -1,4 +1,4 @@
-using Microsoft.Playwright;
+using PuppeteerSharp;
 
 namespace ImgForge.Core;
 
@@ -7,10 +7,12 @@ public class ImageGenerator(TemplateRenderer renderer)
     public async Task<string> GenerateAsync(GenerateOptions opts)
     {
         var html = renderer.Render(opts);
-        using var playwright = await CreatePlaywrightAsync();
-        await using var browser = await playwright.Chromium.LaunchAsync();
+
+        await EnsureBrowserAsync();
+
+        await using var browser = await Puppeteer.LaunchAsync(new LaunchOptions { Headless = true });
         var page = await browser.NewPageAsync();
-        await page.SetViewportSizeAsync(opts.Width, opts.Height);
+        await page.SetViewportAsync(new ViewPortOptions { Width = opts.Width, Height = opts.Height });
 
         // Write the rendered HTML to a temp file and navigate to it via file:///
         // so Chromium can load local file:/// resources (images, etc.).
@@ -20,8 +22,8 @@ public class ImageGenerator(TemplateRenderer renderer)
         {
             await File.WriteAllTextAsync(tempHtml, html);
             var fileUri = "file:///" + tempHtml.Replace('\\', '/');
-            await page.GotoAsync(fileUri, new() { WaitUntil = WaitUntilState.NetworkIdle });
-            await page.ScreenshotAsync(new() { Path = opts.Out, FullPage = false });
+            await page.GoToAsync(fileUri, new NavigationOptions { WaitUntil = [WaitUntilNavigation.Networkidle0] });
+            await page.ScreenshotAsync(opts.Out, new ScreenshotOptions { FullPage = false });
         }
         finally
         {
@@ -31,19 +33,13 @@ public class ImageGenerator(TemplateRenderer renderer)
         return opts.Out;
     }
 
-    private static async Task<IPlaywright> CreatePlaywrightAsync()
+    private static async Task EnsureBrowserAsync()
     {
-        try
+        var fetcher = new BrowserFetcher();
+        if (!fetcher.GetInstalledBrowsers().Any())
         {
-            return await Playwright.CreateAsync();
-        }
-        catch (Exception ex) when (ex.Message.Contains("Driver not found") || ex.Message.Contains("node.exe"))
-        {
-            Console.Error.WriteLine("Playwright driver not found. Running 'playwright install chromium'...");
-            var exitCode = Microsoft.Playwright.Program.Main(["install", "chromium"]);
-            if (exitCode != 0)
-                throw new InvalidOperationException($"Playwright install failed with exit code {exitCode}.");
-            return await Playwright.CreateAsync();
+            Console.Error.WriteLine("Downloading Chromium (first run only)...");
+            await fetcher.DownloadAsync();
         }
     }
 }

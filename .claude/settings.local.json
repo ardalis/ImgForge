@@ -5,7 +5,10 @@
       "Read(//c/Users/steve/.claude/agents/**)",
       "Read(//c/Users/steve/.claude/**)",
       "Bash(dotnet pack:*)",
-      "Bash(gh release:*)"
+      "Bash(gh release:*)",
+      "Bash(dotnet package:*)",
+      "Bash(dotnet build:*)",
+      "Bash(dotnet test:*)"
     ]
   }
 }

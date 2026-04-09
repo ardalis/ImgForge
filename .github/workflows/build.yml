@@ -28,8 +28,5 @@ jobs:
     - name: Build
       run: dotnet build --configuration Release --no-restore
 
-    - name: Install Playwright browsers
-      run: pwsh tests/ImgForge.Tests/bin/Release/net10.0/playwright.ps1 install --with-deps chromium
-
     - name: Test
       run: dotnet test --configuration Release --no-restore
