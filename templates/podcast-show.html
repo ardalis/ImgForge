@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <style>
+    /*
+     * Podcast Show Art — 3000×3000
+     * Designed for display at small sizes in podcast apps.
+     * Keep text bold, high-contrast, and minimal.
+     */
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      width: {{ width }}px;
+      height: {{ height }}px;
+      {% if bg != "" %}
+      background-color: #1a0533;
+      background-image: url('{{ bg }}');
+      background-size: cover;
+      background-position: center;
+      {% else %}
+      background: linear-gradient(150deg, #1a0533 0%, #3b0764 40%, #1d4ed8 100%);
+      {% endif %}
+      font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+      color: white;
+      overflow: hidden;
+      position: relative;
+    }
+
+    {% if bg != "" %}
+    .scrim {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(
+        to bottom,
+        rgba(0,0,0,0.55) 0%,
+        rgba(0,0,0,0.20) 35%,
+        rgba(0,0,0,0.20) 65%,
+        rgba(0,0,0,0.75) 100%
+      );
+    }
+    {% endif %}
+
+    /* Decorative corner accent */
+    .corner-accent {
+      position: absolute;
+      top: 0;
+      right: 0;
+      width: 600px;
+      height: 600px;
+      background: radial-gradient(circle at top right, rgba(167,139,250,0.30), transparent 70%);
+    }
+
+    .content {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 240px;
+      text-align: center;
+    }
+
+    /* Show logo / overlay image */
+    .show-logo {
+      margin-bottom: 120px;
+    }
+
+    .show-logo img {
+      max-height: 360px;
+      max-width: 900px;
+      object-fit: contain;
+      filter: drop-shadow(0 8px 24px rgba(0,0,0,0.7));
+    }
+
+    .label {
+      font-size: 52px;
+      font-weight: 600;
+      letter-spacing: 10px;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.65);
+      margin-bottom: 60px;
+    }
+
+    h1 {
+      font-size: 200px;
+      font-weight: 900;
+      line-height: 1.0;
+      letter-spacing: -6px;
+      text-shadow: 0 8px 40px rgba(0,0,0,0.9);
+    }
+
+    .tagline {
+      margin-top: 80px;
+      font-size: 60px;
+      font-weight: 400;
+      color: rgba(255,255,255,0.70);
+      letter-spacing: 1px;
+    }
+
+    /* Bottom border stripe */
+    .stripe {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 24px;
+      background: linear-gradient(to right, #7c3aed, #2563eb, #7c3aed);
+    }
+  </style>
+</head>
+<body>
+  {% if bg != "" %}<div class="scrim"></div>{% endif %}
+  <div class="corner-accent"></div>
+
+  <div class="content">
+    {% if overlays.size > 0 %}
+    <div class="show-logo">
+      {% for img in overlays %}
+      <img src="{{ img.src }}" style="{{ img.style }}" />
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="label">Podcast</div>
+    <h1>{{ title }}</h1>
+  </div>
+
+  <div class="stripe"></div>
+</body>
+</html>

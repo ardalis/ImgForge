@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/ImgForge.Core/ImgForge.Core.csproj" />
+    <Project Path="src/ImgForge/ImgForge.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/ImgForge.Tests/ImgForge.Tests.csproj" />
+  </Folder>
+</Solution>

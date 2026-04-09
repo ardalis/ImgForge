@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:chatgpt.com)",
+      "Read(//c/Users/steve/.claude/agents/**)",
+      "Read(//c/Users/steve/.claude/**)"
+    ]
+  }
+}

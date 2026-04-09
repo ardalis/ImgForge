@@ -1,0 +1,20 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>imgforge</ToolCommandName>
+    <PackageId>ImgForge</PackageId>
+    <Version>0.1.0</Version>
+    <Description>Generate blog and YouTube thumbnail images from HTML templates.</Description>
+    <Authors>ardalis</Authors>
+    <PackageReleaseNotes>Initial release.</PackageReleaseNotes>
+    <NoWarn>NU5111</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.CommandLine" />
+    <ProjectReference Include="..\ImgForge.Core\ImgForge.Core.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -416,3 +416,8 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+
+# ImgForge generated output images
+*.png
+nupkg/
+

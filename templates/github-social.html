@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      width: {{ width }}px;
+      height: {{ height }}px;
+      {% if bg != "" %}
+      background-color: #0d1117;
+      background-image: url('{{ bg }}');
+      background-size: cover;
+      background-position: center;
+      {% else %}
+      background: linear-gradient(160deg, #0d1117 0%, #161b22 50%, #0d1117 100%);
+      {% endif %}
+      font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+      color: #e6edf3;
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* Subtle dot grid overlay — evokes GitHub's design language */
+    .grid {
+      position: absolute;
+      inset: 0;
+      background-image: radial-gradient(circle, rgba(110,118,129,0.18) 1px, transparent 1px);
+      background-size: 32px 32px;
+    }
+
+    {% if bg != "" %}
+    .scrim {
+      position: absolute;
+      inset: 0;
+      background: rgba(13,17,23,0.75);
+    }
+    {% endif %}
+
+    .content {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      padding: 70px 90px;
+    }
+
+    /* Optional: top logo row */
+    .logo-row {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      margin-bottom: 36px;
+    }
+
+    .logo-row img {
+      max-height: 56px;
+      max-width: 180px;
+      object-fit: contain;
+      filter: drop-shadow(0 1px 4px rgba(0,0,0,0.6));
+    }
+
+    /* Owner/org label */
+    .owner {
+      font-size: 26px;
+      font-weight: 400;
+      color: #8b949e;
+      letter-spacing: 0.2px;
+      margin-bottom: 18px;
+    }
+
+    h1 {
+      font-size: 80px;
+      font-weight: 700;
+      line-height: 1.05;
+      letter-spacing: -2px;
+      color: #e6edf3;
+      text-shadow: 0 2px 12px rgba(0,0,0,0.8);
+    }
+
+    .accent-bar {
+      width: 80px;
+      height: 4px;
+      background: #238636;   /* GitHub green */
+      border-radius: 2px;
+      margin-top: 36px;
+    }
+
+    /* "github.com/owner/repo" footer strip */
+    .footer {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 64px;
+      background: rgba(22,27,34,0.90);
+      border-top: 1px solid rgba(110,118,129,0.25);
+      display: flex;
+      align-items: center;
+      padding: 0 90px;
+      font-size: 24px;
+      color: #8b949e;
+      letter-spacing: 0.3px;
+    }
+
+    .footer span {
+      color: #58a6ff;
+    }
+  </style>
+</head>
+<body>
+  <div class="grid"></div>
+  {% if bg != "" %}<div class="scrim"></div>{% endif %}
+
+  <div class="content">
+    {% if overlays.size > 0 %}
+    <div class="logo-row">
+      {% for img in overlays %}
+      <img src="{{ img.src }}" style="{{ img.style }}" />
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <h1>{{ title }}</h1>
+    <div class="accent-bar"></div>
+  </div>
+
+  <div class="footer">
+    github.com / <span>&nbsp;{{ title }}</span>
+  </div>
+</body>
+</html>

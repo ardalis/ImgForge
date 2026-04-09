@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      width: {{ width }}px;
+      height: {{ height }}px;
+      {% if bg != "" %}
+      background-color: #1a1a2e;
+      background-image: url('{{ bg }}');
+      background-size: cover;
+      background-position: center;
+      {% else %}
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 45%, #0f3460 100%);
+      {% endif %}
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Segoe UI', Arial, sans-serif;
+      color: white;
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* Gradient scrim — only meaningful when a bg image is present */
+    .scrim {
+      position: absolute;
+      inset: 0;
+      {% if bg != "" %}
+      background: linear-gradient(
+        to bottom,
+        rgba(0,0,0,0.60) 0%,
+        rgba(0,0,0,0.20) 40%,
+        rgba(0,0,0,0.20) 60%,
+        rgba(0,0,0,0.70) 100%
+      );
+      {% else %}
+      background: transparent;
+      {% endif %}
+    }
+
+    .content {
+      position: relative;
+      text-align: center;
+      padding: 0 80px;
+      max-width: 100%;
+    }
+
+    h1 {
+      font-size: 68px;
+      font-weight: 700;
+      line-height: 1.15;
+      text-shadow: 0 3px 12px rgba(0,0,0,0.9);
+      letter-spacing: -1px;
+    }
+
+    .tag {
+      display: inline-block;
+      margin-top: 24px;
+      padding: 8px 28px;
+      background: rgba(255,255,255,0.18);
+      border: 2px solid rgba(255,255,255,0.55);
+      border-radius: 40px;
+      font-size: 24px;
+      font-weight: 500;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      backdrop-filter: blur(4px);
+    }
+
+    .overlays {
+      position: absolute;
+      top: 28px;
+      left: 36px;
+      display: flex;
+      gap: 16px;
+    }
+
+    .overlays img {
+      max-height: 70px;
+      max-width: 160px;
+      object-fit: contain;
+      filter: drop-shadow(0 2px 6px rgba(0,0,0,0.7));
+    }
+  </style>
+</head>
+<body>
+  <div class="scrim"></div>
+
+  <div class="content">
+    <h1>{{ title }}</h1>
+    <span class="tag">ardalis.com</span>
+  </div>
+
+  {% if overlays.size > 0 %}
+  <div class="overlays">
+    {% for img in overlays %}
+    <img src="{{ img.src }}" style="{{ img.style }}" />
+    {% endfor %}
+  </div>
+  {% endif %}
+</body>
+</html>
