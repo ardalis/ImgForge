@@ -40,7 +40,7 @@ ImageGenerator    (Playwright: loads HTML in headless Chromium, screenshots to P
 
 ```bash
 imgforge generate \
-  --template blog \              # built-in name ("blog", "youtube") or path to a .html file
+  --template blog \              # built-in name ("blog", "youtube") or path to a .html file or folder (with a template.html file in it)
   --title "Modular Monoliths Done Right" \
   --bg ./images/cover.jpg \      # local path or HTTP(S) URL; optional
   --overlay ./logo.png \         # optional; repeat for multiple overlays
@@ -109,6 +109,9 @@ imgforge generate --template templates/podcast-episode.html --title "My Episode 
 
 # Omit --format and --width/--height to be prompted interactively
 imgforge generate --template templates/podcast-episode.html --title "My Episode Title" --out out.png
+
+# Omit --out to use title for output name
+imgforge generate --template templates/youtube-bold.html --title "This is the title of the show" --format youtube
 ```
 
 ## Built-in Templates
@@ -120,7 +123,7 @@ imgforge generate --template templates/podcast-episode.html --title "My Episode 
 
 ## Custom Templates
 
-Any `.html` file can be used as a template. Scriban Liquid syntax is supported for variable injection:
+Any `.html` file (or a folder with a `template.html` file in it) can be used as a template. Scriban Liquid syntax is supported for variable injection:
 
 ```html
 <html>
@@ -176,4 +179,10 @@ dotnet test
 ```bash
 dotnet tool install --global ImgForge
 imgforge generate --template blog --title "Hello!" --out hello.png
+```
+
+## Run Directly from NuGet via DNX
+
+```bash
+dnx -y imgforge generate --template blog --title "Hello!" --out hello.png
 ```

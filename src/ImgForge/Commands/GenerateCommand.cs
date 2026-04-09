@@ -64,10 +64,13 @@ public static class GenerateCommand
                          "podcast-show (3000×3000), podcast-episode (3000×3000). " +
                          "Explicit --width/--height override the preset.");
 
-        var outOpt = new Option<string>(
+        var outOpt = new Option<string?>(
             name: "--out",
-            description: "Output PNG file path.")
-        { IsRequired = true };
+            description: "Output PNG file path. Defaults to the title as a slug in the current directory.");
+
+        var outDirOpt = new Option<string?>(
+            name: "--out-dir",
+            description: "Output directory. Filename is derived from --title. Ignored if --out is provided.");
 
         var widthOpt = new Option<int>(
             name: "--width",
@@ -90,6 +93,7 @@ public static class GenerateCommand
             varOpt,
             formatOpt,
             outOpt,
+            outDirOpt,
             widthOpt,
             heightOpt
         };
@@ -104,7 +108,9 @@ public static class GenerateCommand
             var headshotFilter = context.ParseResult.GetValueForOption(headshotFilterOpt)!;
             var vars           = context.ParseResult.GetValueForOption(varOpt);
             var format         = context.ParseResult.GetValueForOption(formatOpt);
-            var out_           = context.ParseResult.GetValueForOption(outOpt)!;
+            var outDir         = context.ParseResult.GetValueForOption(outDirOpt);
+            var out_           = FileNameHelper.ResolveOutputPath(
+                                   context.ParseResult.GetValueForOption(outOpt), outDir, title);
 
             // Detect whether --width/--height were explicitly supplied by the user
             // (IsImplicit = true means the value came from getDefaultValue, not the command line)
