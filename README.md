@@ -7,8 +7,8 @@ A .NET CLI tool for generating blog and YouTube thumbnail images from HTML templ
 ImgForge follows a three-stage pipeline:
 
 1. **Template rendering** — An HTML template (built-in or custom) is loaded and variable placeholders are replaced with the supplied values (title, background, dimensions, overlays) using [Scriban](https://github.com/scriban/scriban).
-2. **Browser rendering** — The resulting HTML is loaded into a headless Chromium browser via [Microsoft.Playwright](https://playwright.dev/dotnet/), which applies all CSS layout and styling exactly as a real browser would.
-3. **Screenshot capture** — Playwright screenshots the rendered page at the specified viewport size and writes a PNG to the output path.
+2. **Browser rendering** — The resulting HTML is loaded into a headless Chromium browser via [PuppeteerSharp](https://github.com/hardkoded/puppeteer-sharp), which applies all CSS layout and styling exactly as a real browser would.
+3. **Screenshot capture** — PuppeteerSharp screenshots the rendered page at the specified viewport size and writes a PNG to the output path.
 
 ```
 GenerateOptions
@@ -20,7 +20,7 @@ TemplateRenderer  (Scriban: injects title, bg, width, height, overlays into HTML
     HTML string
       │
       ▼
-ImageGenerator    (Playwright: loads HTML in headless Chromium, screenshots to PNG)
+ImageGenerator    (PuppeteerSharp: loads HTML in headless Chromium, screenshots to PNG)
       │
       ▼
     output.png
@@ -31,7 +31,7 @@ ImageGenerator    (Playwright: loads HTML in headless Chromium, screenshots to P
 | Package | Role |
 |---|---|
 | [Scriban](https://github.com/scriban/scriban) | Liquid-syntax template engine — substitutes `{{ title }}`, `{{ bg }}`, `{{ width }}`, `{{ height }}`, and `{% for img in overlays %}` in HTML templates |
-| [Microsoft.Playwright](https://playwright.dev/dotnet/) | Headless Chromium driver — renders the HTML with full CSS support and captures a pixel-perfect screenshot |
+| [PuppeteerSharp](https://github.com/hardkoded/puppeteer-sharp) | Headless Chromium driver — renders the HTML with full CSS support and captures a pixel-perfect screenshot |
 | [System.CommandLine](https://github.com/dotnet/command-line-api) | Parses CLI arguments and subcommands |
 | [SixLabors.ImageSharp](https://github.com/SixLabors/ImageSharp) | Used in tests to verify output PNG dimensions |
 | [xunit](https://xunit.net/) | Test framework |
@@ -164,8 +164,7 @@ Pass a name to `--headshot-filter` or supply any raw [CSS `filter`](https://deve
 ```bash
 dotnet build
 
-# Install Playwright's Chromium browser (first time only)
-pwsh src/ImgForge.Core/bin/Debug/net10.0/.playwright/package/playwright.ps1 install chromium
+# Chromium is downloaded automatically on first image generation run
 
 # Unit tests (no browser required)
 dotnet test --filter "Category!=Integration"
