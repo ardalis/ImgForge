@@ -31,7 +31,7 @@ ImageGenerator    (PuppeteerSharp: loads HTML in headless Chromium, screenshots 
 | Package | Role |
 |---|---|
 | [Scriban](https://github.com/scriban/scriban) | Liquid-syntax template engine — substitutes `{{ title }}`, `{{ bg }}`, `{{ width }}`, `{{ height }}`, and `{% for img in overlays %}` in HTML templates |
-| [PuppeteerSharp](https://github.com/hardkoded/puppeteer-sharp) | Headless Chromium driver — renders the HTML with full CSS support and captures a pixel-perfect screenshot |
+| [PuppeteerSharp](https://github.com/hardkoded/puppeteer-sharp) | Headless Chromium driver — renders the HTML with full CSS support and captures a pixel-perfect screenshot. Chromium is downloaded automatically on first run. |
 | [System.CommandLine](https://github.com/dotnet/command-line-api) | Parses CLI arguments and subcommands |
 | [SixLabors.ImageSharp](https://github.com/SixLabors/ImageSharp) | Used in tests to verify output PNG dimensions |
 | [xunit](https://xunit.net/) | Test framework |
@@ -40,17 +40,36 @@ ImageGenerator    (PuppeteerSharp: loads HTML in headless Chromium, screenshots 
 
 ```bash
 imgforge generate \
-  --template blog \              # built-in name ("blog", "youtube") or path to a .html file or folder (with a template.html file in it)
+  --template blog \             # built-in name ("blog", "youtube") or path to a .html file or folder (with a template.html file in it)
   --title "Modular Monoliths Done Right" \
-  --bg ./images/cover.jpg \      # local path or HTTP(S) URL; optional
-  --overlay ./logo.png \         # optional; repeat for multiple overlays
-  --headshot ./guest.jpg \       # optional guest headshot; placed in a styled circle
-  --headshot-filter blue-mono \  # built-in: blue-mono (default), mono, none — or a raw CSS filter string
-  --format podcast-episode \     # sets width/height from a named preset (see formats below)
-  --out og.png \
-  --width 1200 \                 # explicit width — overrides --format; prompted if neither is given
-  --height 630                   # explicit height — overrides --format; prompted if neither is given
+  --bg ./images/cover.jpg \     # local path, HTTP(S) URL, or "random" (fetches a random image from picsum.photos); optional
+  --overlay ./logo.png \        # optional; repeat for multiple overlays
+  --headshot ./guest.jpg \      # optional guest headshot; placed in a styled circle
+  --headshot-filter blue-mono \ # built-in: blue-mono (default), mono, none — or a raw CSS filter string
+  --var season=3 \              # arbitrary key=value pairs injected as {{ vars.season }} in templates; repeat for multiple
+  --format podcast-episode \    # sets width/height from a named preset (see formats below)
+  --out og.png \                # output file path; defaults to title slug in current directory
+  --out-dir ./output \          # output directory; filename derived from --title; ignored if --out is provided
+  --width 1200 \                # explicit width — overrides --format; prompted if neither is given
+  --height 630                  # explicit height — overrides --format; prompted if neither is given
 ```
+
+### All flags
+
+| Flag | Required | Default | Description |
+|---|---|---|---|
+| `--template` | Yes | — | Built-in template name (`blog`, `youtube`) or path to a `.html` file or a directory containing `template.html` |
+| `--title` | Yes | — | Main heading text injected into the template |
+| `--bg` | No | — | Background image: local file path, HTTP(S) URL, or `random` (fetches a random image from [picsum.photos](https://picsum.photos)) |
+| `--overlay` | No | — | Overlay image path. Repeatable for multiple overlays |
+| `--headshot` | No | — | Guest headshot image path placed in the template's headshot slot |
+| `--headshot-filter` | No | `blue-mono` | Filter applied to the headshot. Built-in: `blue-mono`, `mono`, `none`. Or supply a raw CSS `filter` string |
+| `--var` | No | — | Arbitrary template variable as `key=value` (e.g. `--var episode=42`). Accessible in templates as `{{ vars.episode }}`. Repeatable |
+| `--format` | No | — | Output format preset that sets width and height. Choices: `youtube`, `blog`, `github`, `podcast-show`, `podcast-episode`. Explicit `--width`/`--height` override the preset |
+| `--out` | No | title slug `.png` | Output PNG file path |
+| `--out-dir` | No | `.` | Output directory. Filename is derived from `--title`. Ignored if `--out` is provided |
+| `--width` | No | `1200` | Viewport width in pixels. Overrides `--format` |
+| `--height` | No | `630` | Viewport height in pixels. Overrides `--format` |
 
 ### Format presets
 
@@ -81,14 +100,17 @@ Ideal dimensions vary by platform and use case. Use `--width` and `--height` to 
 
 ```bash
 # YouTube thumbnail (using --format preset)
-imgforge generate --template templates/youtube-bold.html --title "My Video Title" --bg ./bg.jpg --out thumb.png --format youtube
+imgforge generate --template youtube --title "My Video Title" --bg ./bg.jpg --out thumb.png --format youtube
+
+# YouTube thumbnail with a random background
+imgforge generate --template youtube --title "My Video Title" --bg random --out thumb.png --format youtube
 
 # YouTube thumbnail with guest headshot (blue monochrome filter)
-imgforge generate --template templates/youtube-bold.html --title "Building Better APIs" \
+imgforge generate --template youtube --title "Building Better APIs" \
   --headshot ./guest.jpg --out thumb.png --format youtube
 
 # Blog / Open Graph card
-imgforge generate --template templates/blog-gradient.html --title "My Post Title" --bg ./cover.jpg --out og.png --format blog
+imgforge generate --template blog --title "My Post Title" --bg ./cover.jpg --out og.png --format blog
 
 # GitHub social preview
 imgforge generate --template templates/github-social.html --title "my-repo" --bg ./cover.jpg --out social-preview.png --format github
@@ -107,11 +129,14 @@ imgforge generate --template templates/podcast-episode.html \
 imgforge generate --template templates/podcast-episode.html --title "My Episode Title" \
   --headshot ./guest.jpg --headshot-filter mono --out podcast-episode.png --format podcast-episode
 
+# Write output to a specific directory (filename derived from title)
+imgforge generate --template blog --title "My Post Title" --bg ./cover.jpg --out-dir ./output --format blog
+
 # Omit --format and --width/--height to be prompted interactively
 imgforge generate --template templates/podcast-episode.html --title "My Episode Title" --out out.png
 
-# Omit --out to use title for output name
-imgforge generate --template templates/youtube-bold.html --title "This is the title of the show" --format youtube
+# Omit --out and --out-dir to use title as the output filename in the current directory
+imgforge generate --template youtube --title "This is the title of the show" --format youtube
 ```
 
 ## Built-in Templates
@@ -135,18 +160,25 @@ Any `.html` file (or a folder with a `template.html` file in it) can be used as 
   {% for img in overlays %}
   <img src="{{ img.src }}" style="position:absolute; {{ img.style }}" />
   {% endfor %}
+  {% if headshot %}
+  <img src="{{ headshot.src }}" style="filter:{{ headshot.filter_css }};" />
+  {% endif %}
+  <p>Season {{ vars.season }}, Episode {{ vars.episode }}</p>
 </body>
 </html>
 ```
 
+### Template variables
+
 | Variable | Type | Description |
 |---|---|---|
 | `title` | `string` | Main heading text |
-| `bg` | `string` | Background image URI — local `file:///` paths and HTTP(S) URLs are both accepted |
+| `bg` | `string` | Background image URI — local `file:///` paths, HTTP(S) URLs, and random picsum URLs are all resolved before injection |
 | `width` | `int` | Viewport width in pixels |
 | `height` | `int` | Viewport height in pixels |
 | `overlays` | array | List of `{ src, style }` overlay image objects |
-| `headshot` | object or `null` | Guest headshot — exposes `headshot.src` (file URI) and `headshot.filter_css` (CSS filter string). `null` when `--headshot` is not supplied. |
+| `headshot` | object or `null` | Guest headshot — exposes `headshot.src` (file URI) and `headshot.filter_css` (CSS filter string). `null` when `--headshot` is not supplied |
+| `vars` | object | Arbitrary key/value pairs supplied via `--var key=value`. Access as `{{ vars.key }}` |
 
 ### Headshot filters
 
@@ -159,17 +191,29 @@ Pass a name to `--headshot-filter` or supply any raw [CSS `filter`](https://deve
 | `none` | `none` | No filter; original colours kept |
 | *(custom)* | *(your string)* | Any valid CSS filter string, e.g. `sepia(80%) hue-rotate(270deg)` |
 
+### Custom template directories
+
+When you pass a directory path to `--template`, ImgForge looks for `template.html` inside it and injects a `<base>` tag so that relative image references (e.g. a watermark sitting next to `template.html`) resolve correctly.
+
+```text
+my-template/
+  template.html
+  watermark.png   ← referenced as just "watermark.png" inside the template
+```
+
+```bash
+imgforge generate --template ./my-template --title "Hello" --format blog
+```
+
 ## Build and Test
 
 ```bash
 dotnet build
 
-# Chromium is downloaded automatically on first image generation run
-
 # Unit tests (no browser required)
 dotnet test --filter "Category!=Integration"
 
-# Full test suite including integration tests
+# Full test suite including integration tests (Chromium is downloaded automatically on first run)
 dotnet test
 ```
 
@@ -179,6 +223,8 @@ dotnet test
 dotnet tool install --global ImgForge
 imgforge generate --template blog --title "Hello!" --out hello.png
 ```
+
+Chromium is downloaded automatically on the first run — no separate install step needed.
 
 ## Run Directly from NuGet via DNX
 
