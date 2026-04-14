@@ -18,10 +18,10 @@ public static class GenerateCommand
 
     public static Command Build()
     {
-        var templateOpt = new Option<string>(
+        var templateOpt = new Option<string?>(
             name: "--template",
-            description: "Built-in template name (blog, youtube) or path to a .html file.")
-        { IsRequired = true };
+            description: "Built-in template name (blog, youtube) or path to a .html file. " +
+                         "If omitted, defaults to .imgforge/template.html when it exists.");
 
         var titleOpt = new Option<string>(
             name: "--title",
@@ -100,7 +100,7 @@ public static class GenerateCommand
 
         cmd.SetHandler(async (context) =>
         {
-            var template       = context.ParseResult.GetValueForOption(templateOpt)!;
+            var template       = context.ParseResult.GetValueForOption(templateOpt);
             var title          = context.ParseResult.GetValueForOption(titleOpt)!;
             var bg             = context.ParseResult.GetValueForOption(bgOpt);
             var overlays       = context.ParseResult.GetValueForOption(overlayOpt);
@@ -122,6 +122,12 @@ public static class GenerateCommand
 
             try
             {
+                var (resolvedTemplate, usedDefaultTemplate) = TemplatePathResolver.ResolveTemplate(template);
+                if (usedDefaultTemplate)
+                {
+                    Console.WriteLine($"No --template provided; using default template at '{resolvedTemplate}'.");
+                }
+
                 // Resolve dimensions: explicit flags > --format > interactive prompt
                 if (!widthExplicit || !heightExplicit)
                 {
@@ -143,7 +149,7 @@ public static class GenerateCommand
                     .ToDictionary(parts => parts[0].Trim(), parts => parts[1]);
 
                 var opts = new GenerateOptions(
-                    Template: template,
+                    Template: resolvedTemplate,
                     Title: title,
                     Background: bg,
                     Overlays: (overlays ?? []).Select(o => new OverlayImage(o)).ToList(),
