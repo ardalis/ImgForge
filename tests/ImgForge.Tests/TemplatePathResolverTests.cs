@@ -17,8 +17,8 @@ public class TemplatePathResolverTests
     public void ResolveTemplate_WhenMissingAndDefaultExists_ReturnsDefaultTemplate()
     {
         using var cwd = new WorkingDirectoryScope();
-        Directory.CreateDirectory(Path.Combine(cwd.Path, ".imgforge"));
-        File.WriteAllText(Path.Combine(cwd.Path, ".imgforge", "template.html"), "<html></html>");
+        Directory.CreateDirectory(Path.Combine(cwd.TempPath, ".imgforge"));
+        File.WriteAllText(Path.Combine(cwd.TempPath, ".imgforge", "template.html"), "<html></html>");
 
         var result = TemplatePathResolver.ResolveTemplate(null);
 
@@ -41,18 +41,25 @@ public class TemplatePathResolverTests
     private sealed class WorkingDirectoryScope : IDisposable
     {
         private readonly string _originalPath = Directory.GetCurrentDirectory();
-        public string Path { get; } = System.IO.Path.Combine(System.IO.Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        public string TempPath { get; } = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
 
         public WorkingDirectoryScope()
         {
-            Directory.CreateDirectory(Path);
-            Directory.SetCurrentDirectory(Path);
+            Directory.CreateDirectory(TempPath);
+            Directory.SetCurrentDirectory(TempPath);
         }
 
         public void Dispose()
         {
             Directory.SetCurrentDirectory(_originalPath);
-            Directory.Delete(Path, recursive: true);
+            try
+            {
+                Directory.Delete(TempPath, recursive: true);
+            }
+            catch
+            {
+                // best-effort cleanup
+            }
         }
     }
 }
