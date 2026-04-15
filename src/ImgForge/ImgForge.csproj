@@ -8,7 +8,7 @@
     <Version>0.1.5</Version>
     <Description>Generate blog and YouTube thumbnail images from HTML templates.</Description>
     <Authors>ardalis</Authors>
-    <PackageReleaseNotes>Add --bg random support: uses a random picsum.photos image sized to match the output dimensions.</PackageReleaseNotes>
+    <PackageReleaseNotes>Add default templste folder..</PackageReleaseNotes>
     <NoWarn>NU5111</NoWarn>
     <RepositoryUrl>https://github.com/ardalis/ImgForge</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
