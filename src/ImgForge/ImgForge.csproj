@@ -1,11 +1,11 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>imgforge</ToolCommandName>
     <PackageId>ImgForge</PackageId>
-    <Version>0.1.4</Version>
+    <Version>0.1.5</Version>
     <Description>Generate blog and YouTube thumbnail images from HTML templates.</Description>
     <Authors>ardalis</Authors>
     <PackageReleaseNotes>Add --bg random support: uses a random picsum.photos image sized to match the output dimensions.</PackageReleaseNotes>
