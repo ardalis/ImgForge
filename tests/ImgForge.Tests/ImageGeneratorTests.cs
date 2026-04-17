@@ -21,6 +21,7 @@ public class ImageGeneratorTests : IDisposable
         var opts = new GenerateOptions(
             Template: templateFile,
             Title: "Test",
+            Subtitle: null,
             Background: null,
             Overlays: [],
             Out: outPath,
@@ -50,6 +51,7 @@ public class ImageGeneratorTests : IDisposable
         var opts = new GenerateOptions(
             Template: templateFile,
             Title: "Test",
+            Subtitle: null,
             Background: null,
             Overlays: [],
             Out: outPath,

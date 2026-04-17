@@ -40,7 +40,7 @@ public class TemplateRenderer
             foreach (var (k, v) in opts.Vars)
                 vars[k] = v;
 
-        var model = new RenderModel(opts.Title, bg ?? string.Empty, opts.Width, opts.Height, overlays, headshot, vars);
+        var model = new RenderModel(opts.Title, opts.Subtitle ?? string.Empty, bg ?? string.Empty, opts.Width, opts.Height, overlays, headshot, vars);
 
         var rendered = template.Render(model, member => member.Name);
 
@@ -139,6 +139,7 @@ internal record HeadshotModel(string src, string filter_css);
 
 internal record RenderModel(
     string title,
+    string subtitle,
     string bg,
     int width,
     int height,

@@ -28,6 +28,10 @@ public static class GenerateCommand
             description: "Main heading text injected into the template.")
         { IsRequired = true };
 
+        var subtitleOpt = new Option<string?>(
+            name: "--subtitle",
+            description: "Optional subtitle text rendered below the title in templates that support it.");
+
         var bgOpt = new Option<string?>(
             name: "--bg",
             description: "Background image: local file path or HTTP(S) URL. Optional.");
@@ -86,6 +90,7 @@ public static class GenerateCommand
         {
             templateOpt,
             titleOpt,
+            subtitleOpt,
             bgOpt,
             overlayOpt,
             headshotOpt,
@@ -102,6 +107,7 @@ public static class GenerateCommand
         {
             var template       = context.ParseResult.GetValueForOption(templateOpt);
             var title          = context.ParseResult.GetValueForOption(titleOpt)!;
+            var subtitle       = context.ParseResult.GetValueForOption(subtitleOpt);
             var bg             = context.ParseResult.GetValueForOption(bgOpt);
             var overlays       = context.ParseResult.GetValueForOption(overlayOpt);
             var headshot       = context.ParseResult.GetValueForOption(headshotOpt);
@@ -151,6 +157,7 @@ public static class GenerateCommand
                 var opts = new GenerateOptions(
                     Template: resolvedTemplate,
                     Title: title,
+                    Subtitle: subtitle,
                     Background: bg,
                     Overlays: (overlays ?? []).Select(o => new OverlayImage(o)).ToList(),
                     Out: out_,

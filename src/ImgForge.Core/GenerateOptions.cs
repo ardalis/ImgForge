@@ -3,6 +3,7 @@ namespace ImgForge.Core;
 public record GenerateOptions(
     string Template,
     string Title,
+    string? Subtitle,
     string? Background,
     IReadOnlyList<OverlayImage> Overlays,
     string Out,
