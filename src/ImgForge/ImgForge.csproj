@@ -5,10 +5,10 @@
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>imgforge</ToolCommandName>
     <PackageId>ImgForge</PackageId>
-    <Version>0.1.5</Version>
+    <Version>0.1.6</Version>
     <Description>Generate blog and YouTube thumbnail images from HTML templates.</Description>
     <Authors>ardalis</Authors>
-    <PackageReleaseNotes>Add default templste folder..</PackageReleaseNotes>
+    <PackageReleaseNotes>Add subtitle support.</PackageReleaseNotes>
     <NoWarn>NU5111</NoWarn>
     <RepositoryUrl>https://github.com/ardalis/ImgForge</RepositoryUrl>
     <RepositoryType>git</RepositoryType>

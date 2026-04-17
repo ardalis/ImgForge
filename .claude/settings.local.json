@@ -1,4 +1,7 @@
 {
+  "env": {
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
+  },
   "permissions": {
     "allow": [
       "WebFetch(domain:chatgpt.com)",
@@ -8,7 +11,8 @@
       "Bash(gh release:*)",
       "Bash(dotnet package:*)",
       "Bash(dotnet build:*)",
-      "Bash(dotnet test:*)"
+      "Bash(dotnet test:*)",
+      "Bash(dotnet *)"
     ]
   }
 }
