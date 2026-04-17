@@ -42,6 +42,7 @@ ImageGenerator    (PuppeteerSharp: loads HTML in headless Chromium, screenshots 
 imgforge generate \
   --template blog \             # built-in name ("blog", "youtube") or path to a .html file or folder (with a template.html file in it)
   --title "Modular Monoliths Done Right" \
+  --subtitle "A practical guide" \  # optional subtitle rendered below the title in templates that support it
   --bg ./images/cover.jpg \     # local path, HTTP(S) URL, or "random" (fetches a random image from picsum.photos); optional
   --overlay ./logo.png \        # optional; repeat for multiple overlays
   --headshot ./guest.jpg \      # optional guest headshot; placed in a styled circle
@@ -58,8 +59,9 @@ imgforge generate \
 
 | Flag | Required | Default | Description |
 |---|---|---|---|
-| `--template` | Yes | — | Built-in template name (`blog`, `youtube`) or path to a `.html` file or a directory containing `template.html` |
+| `--template` | Yes | — | Built-in template name (`blog`, `youtube`, `blog-subtitle`) or path to a `.html` file or a directory containing `template.html` |
 | `--title` | Yes | — | Main heading text injected into the template |
+| `--subtitle` | No | — | Optional subtitle rendered below the title in templates that support it (e.g. `blog-subtitle`) |
 | `--bg` | No | — | Background image: local file path, HTTP(S) URL, or `random` (fetches a random image from [picsum.photos](https://picsum.photos)) |
 | `--overlay` | No | — | Overlay image path. Repeatable for multiple overlays |
 | `--headshot` | No | — | Guest headshot image path placed in the template's headshot slot |
@@ -112,6 +114,11 @@ imgforge generate --template youtube --title "Building Better APIs" \
 # Blog / Open Graph card
 imgforge generate --template blog --title "My Post Title" --bg ./cover.jpg --out og.png --format blog
 
+# NimblePros blog card with subtitle and headshot
+imgforge generate --template blog-subtitle --title "Next Level AI Agents" \
+  --subtitle "MCP Servers" --bg ./cover.jpg \
+  --headshot ./logo.png --format blog --out og.png
+
 # GitHub social preview
 imgforge generate --template templates/github-social.html --title "my-repo" --bg ./cover.jpg --out social-preview.png --format github
 
@@ -145,6 +152,7 @@ imgforge generate --template youtube --title "This is the title of the show" --f
 |---|---|---|
 | `blog` | 1200×630 | Open Graph / social preview card |
 | `youtube` | 1280×720 | YouTube thumbnail |
+| `blog-subtitle` | 1200×630 | Open Graph card with faded background, optional subtitle, and headshot support |
 
 ## Custom Templates
 
@@ -173,6 +181,7 @@ Any `.html` file (or a folder with a `template.html` file in it) can be used as 
 | Variable | Type | Description |
 |---|---|---|
 | `title` | `string` | Main heading text |
+| `subtitle` | `string` | Optional subtitle text — empty string when `--subtitle` is not supplied; guard with `{% if subtitle %}` in templates |
 | `bg` | `string` | Background image URI — local `file:///` paths, HTTP(S) URLs, and random picsum URLs are all resolved before injection |
 | `width` | `int` | Viewport width in pixels |
 | `height` | `int` | Viewport height in pixels |

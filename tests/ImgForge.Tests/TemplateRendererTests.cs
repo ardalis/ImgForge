@@ -13,6 +13,7 @@ public class TemplateRendererTests
         var opts = new GenerateOptions(
             Template: templateHtml,
             Title: "Hello World",
+            Subtitle: null,
             Background: null,
             Overlays: [],
             Out: "out.png",
@@ -45,6 +46,7 @@ public class TemplateRendererTests
         var opts = new GenerateOptions(
             Template: "blog",
             Title: "Test Title",
+            Subtitle: null,
             Background: null,
             Overlays: [],
             Out: "out.png"
@@ -60,6 +62,7 @@ public class TemplateRendererTests
         var opts = new GenerateOptions(
             Template: "youtube",
             Title: "Test Title",
+            Subtitle: null,
             Background: null,
             Overlays: [],
             Out: "out.png",
@@ -84,6 +87,7 @@ public class TemplateRendererTests
             var opts = new GenerateOptions(
                 Template: tempTemplate,
                 Title: "T",
+                Subtitle: null,
                 Background: tempBg,
                 Overlays: [],
                 Out: "out.png"
@@ -112,6 +116,7 @@ public class TemplateRendererTests
             var opts = new GenerateOptions(
                 Template: tempTemplate,
                 Title: "T",
+                Subtitle: null,
                 Background: url,
                 Overlays: [],
                 Out: "out.png"
@@ -137,6 +142,7 @@ public class TemplateRendererTests
             var opts = new GenerateOptions(
                 Template: tempTemplate,
                 Title: "T",
+                Subtitle: null,
                 Background: null,
                 Overlays: [],
                 Out: "out.png"
@@ -164,6 +170,7 @@ public class TemplateRendererTests
             var opts = new GenerateOptions(
                 Template: tempTemplate,
                 Title: "Test",
+                Subtitle: null,
                 Background: null,
                 Overlays: [],
                 Out: "out.png"
@@ -191,6 +198,7 @@ public class TemplateRendererTests
             var opts = new GenerateOptions(
                 Template: tempDir,
                 Title: "Folder Template",
+                Subtitle: null,
                 Background: null,
                 Overlays: [],
                 Out: "out.png"
@@ -217,6 +225,7 @@ public class TemplateRendererTests
             var opts = new GenerateOptions(
                 Template: tempDir,
                 Title: "T",
+                Subtitle: null,
                 Background: null,
                 Overlays: [],
                 Out: "out.png"
@@ -236,6 +245,7 @@ public class TemplateRendererTests
         var opts = new GenerateOptions(
             Template: "blog",
             Title: "No Base Tag",
+            Subtitle: null,
             Background: null,
             Overlays: [],
             Out: "out.png"
