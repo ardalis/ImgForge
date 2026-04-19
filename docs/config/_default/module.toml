@@ -1,0 +1,3 @@
+# Hugo module configuration
+# Theme is loaded from themes/hugo-geekdoc/ (pre-built release tarball)
+# No Hugo module imports needed - site directories are handled automatically by Hugo

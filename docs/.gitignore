@@ -1,0 +1,32 @@
+# Hugo build artifacts
+/public/
+/resources/
+.hugo_build.lock
+
+# Hugo theme (downloaded via serve.cs / CI - not committed)
+/themes/
+
+# Hugo module vendor (no longer used)
+/_vendor/
+
+# Hugo stats
+hugo_stats.json
+
+# Backup directory (created during migration)
+/docs-backup/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Temporary files
+*.tmp
+*.temp
+temp-output.html

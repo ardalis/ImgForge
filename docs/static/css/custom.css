@@ -1,0 +1,56 @@
+/* Custom header icon links for GitHub and NuGet */
+.gdoc-page__header .flex-row {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.gdoc-menu-header__items {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.custom-header-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 0.25rem;
+  transition: background-color 0.15s ease;
+  text-decoration: none;
+}
+
+.custom-header-link:hover {
+  background-color: var(--accent-color-lite, rgba(2, 132, 199, 0.1));
+}
+
+.custom-header-link svg,
+.custom-header-link img {
+  width: 1.5625rem;
+  height: 1.5625rem;
+}
+
+.custom-header-link svg {
+  fill: currentColor;
+}
+
+.custom-header-link img {
+  object-fit: contain;
+  background-color: #ffffff;
+  padding: 0.15rem;
+  border-radius: 0.25rem;
+}
+
+/* Dark mode: keep white background for contrast */
+[color-theme=dark] .custom-header-link img {
+  background-color: #ffffff;
+}
+
+/* Align dark mode toggle with custom icons */
+#gdoc-color-theme {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}

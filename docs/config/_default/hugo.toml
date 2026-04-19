@@ -1,0 +1,70 @@
+# Hugo configuration
+# https://gohugo.io/getting-started/configuration/
+
+title = "ImgForge Documentation"
+baseURL = "/"
+theme = "hugo-geekdoc"
+
+# Geekdoc required settings
+pluralizeListTitles = false
+disablePathToLower = true
+pygmentsUseClasses = true
+pygmentsCodeFences = true
+
+# Enable emoji and Git info
+enableEmoji = true
+enableGitInfo = false
+enableRobotsTXT = true
+
+# Language
+languageCode = "en-US"
+defaultContentLanguage = "en"
+
+# Pagination (Hugo 0.128+)
+[pagination]
+  pagerSize = 10
+
+# Taxonomies (disable if not needed)
+disableKinds = ["taxonomy", "term"]
+
+# Outputs
+[outputs]
+  home = ["HTML", "RSS"]
+  page = ["HTML"]
+  section = ["HTML", "RSS"]
+
+# Markup configuration
+[markup]
+  [markup.goldmark]
+    [markup.goldmark.extensions]
+      linkify = false
+    [markup.goldmark.parser]
+      autoHeadingID = true
+      autoHeadingIDType = "github"
+      [markup.goldmark.parser.attribute]
+        block = true
+        title = true
+    [markup.goldmark.renderer]
+      unsafe = true
+  [markup.highlight]
+    anchorLineNos = false
+    codeFences = true
+    guessSyntax = false
+    hl_Lines = ""
+    lineAnchors = ""
+    lineNoStart = 1
+    lineNos = false
+    lineNumbersInTable = true
+    noClasses = false
+    style = "monokai"
+    tabWidth = 4
+
+# Sitemap configuration
+[sitemap]
+  changefreq = "monthly"
+  filename = "sitemap.xml"
+  priority = 0.5
+
+# Minify: disable HTML minification (Geekdoc doesn't support it)
+[minify]
+  disableHTML = true

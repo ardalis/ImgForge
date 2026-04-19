@@ -1,0 +1,64 @@
+# Main navigation menu
+[[main]]
+  name = "Home"
+  url = "/"
+  weight = 5
+
+[[main]]
+  name = "Docs"
+  url = "/docs/"
+  weight = 10
+
+[[main]]
+  name = "GitHub"
+  url = "https://github.com/ardalis/ImgForge"
+  weight = 30
+
+# Sidebar navigation for docs section
+[[sidebar_docs]]
+  name = "Introduction"
+  pageRef = "/docs"
+  weight = 1
+
+[[sidebar_docs]]
+  name = "Getting Started"
+  pageRef = "/docs/getting-started"
+  weight = 10
+
+[[sidebar_docs]]
+  name = "Usage"
+  pageRef = "/docs/usage"
+  weight = 20
+
+[[sidebar_docs]]
+  name = "Templates"
+  pageRef = "/docs/templates"
+  weight = 30
+
+[[sidebar_docs]]
+  name = "Format Presets"
+  pageRef = "/docs/formats"
+  weight = 40
+
+[[sidebar_docs]]
+  name = "Build and Test"
+  pageRef = "/docs/build-and-test"
+  weight = 50
+
+# Social links
+[[social]]
+  name = "GitHub"
+  pre = '<svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-brand-github" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"></path><path d="M9 19c-4.3 1.4 -4.3 -2.5 -6 -3m12 5v-3.5c0 -1 .1 -1.4 -.5 -2c2.8 -.3 5.5 -1.4 5.5 -6a4.6 4.6 0 0 0 -1.3 -3.2a4.2 4.2 0 0 0 -.1 -3.2s-1.1 -.3 -3.5 1.3a12.3 12.3 0 0 0 -6.2 0c-2.4 -1.6 -3.5 -1.3 -3.5 -1.3a4.2 4.2 0 0 0 -.1 3.2a4.6 4.6 0 0 0 -1.3 3.2c0 4.6 2.7 5.7 5.5 6c-.6 .6 -.6 1.2 -.5 2v3.5"></path></svg>'
+  url = "https://github.com/ardalis/ImgForge"
+  weight = 10
+
+# Footer links
+[[footer]]
+  name = "Home"
+  url = "/"
+  weight = 5
+
+[[footer]]
+  name = "Docs"
+  url = "/docs/"
+  weight = 10

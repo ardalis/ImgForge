@@ -1,0 +1,97 @@
+<header class="gdoc-header">
+  <div class="container flex align-center justify-between">
+    {{ if .MenuEnabled }}
+      <label for="menu-control" class="gdoc-nav__control">
+        <div tabindex="0" role="button" aria-pressed="false">
+          <input type="checkbox" class="hidden" id="menu-control" />
+
+          <svg class="gdoc-icon gdoc_menu">
+            <title>{{ i18n "button_nav_open" }}</title>
+            <use xlink:href="#gdoc_menu"></use>
+          </svg>
+          <svg class="gdoc-icon gdoc_arrow_back">
+            <title>{{ i18n "button_nav_close" }}</title>
+            <use xlink:href="#gdoc_arrow_back"></use>
+          </svg>
+        </div>
+      </label>
+    {{ end }}
+    <div>
+      <a class="gdoc-brand gdoc-header__link flex gap-16 align-center" href="{{ .Root.Site.Home.Permalink }}">
+        <img
+          class="gdoc-brand__img"
+          src="{{ (default "brand.svg" .Root.Site.Params.geekdocLogo) | relURL }}"
+          alt=""
+        />
+        <div>
+          <div class="gdoc-brand__title">{{ .Root.Site.Title }}</div>
+          {{ with .Root.Site.Params.geekdocSubtitle }}
+          <div class="gdoc-brand__subtitle">{{ . }}</div>
+          {{ end }}
+        </div>
+      </a>
+    </div>
+    <div class="gdoc-menu-header flex gap-16">
+      <span class="gdoc-menu-header__items">
+        {{ if .Root.Site.Data.menu.extra.header }}
+          {{ partial "menu-extra" (dict "current" .Root "source" .Root.Site.Data.menu.extra.header "target" "header") }}
+        {{ end }}
+
+        <!-- Custom GitHub and NuGet links -->
+        <a href="https://github.com/ardalis/ImgForge" class="gdoc-header__link custom-header-link" aria-label="GitHub Repository" title="View on GitHub" target="_blank" rel="noopener noreferrer">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="gdoc-icon">
+            <title>GitHub</title>
+            <path d="M12 2A10 10 0 0 0 2 12c0 4.42 2.87 8.17 6.84 9.5.5.08.66-.23.66-.5v-1.69c-2.77.6-3.36-1.34-3.36-1.34-.46-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.87 1.52 2.34 1.07 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.92 0-1.11.38-2 1.03-2.71-.1-.25-.45-1.29.1-2.64 0 0 .84-.27 2.75 1.02.79-.22 1.65-.33 2.5-.33.85 0 1.71.11 2.5.33 1.91-1.29 2.75-1.02 2.75-1.02.55 1.35.2 2.39.1 2.64.65.71 1.03 1.6 1.03 2.71 0 3.82-2.34 4.66-4.57 4.91.36.31.69.92.69 1.85V21c0 .27.16.59.67.5C19.14 20.16 22 16.42 22 12A10 10 0 0 0 12 2z"/>
+          </svg>
+        </a>
+
+        <a href="https://www.nuget.org/packages/ImgForge" class="gdoc-header__link custom-header-link" aria-label="NuGet Package" title="View on NuGet" target="_blank" rel="noopener noreferrer">
+          <img src="/img/nuget-icon.png" alt="NuGet" class="gdoc-icon" />
+        </a>
+
+        <span id="gdoc-color-theme" tabindex="0" role="button" aria-pressed="false">
+          <svg class="gdoc-icon gdoc_brightness_dark">
+            <title>{{ i18n "button_toggle_dark" }}</title>
+            <use xlink:href="#gdoc_brightness_dark"></use>
+          </svg>
+          <svg class="gdoc-icon gdoc_brightness_light">
+            <title>{{ i18n "button_toggle_dark" }}</title>
+            <use xlink:href="#gdoc_brightness_light"></use>
+          </svg>
+          <svg class="gdoc-icon gdoc_brightness_auto">
+            <title>{{ i18n "button_toggle_dark" }}</title>
+            <use xlink:href="#gdoc_brightness_auto"></use>
+          </svg>
+        </span>
+
+        <span class="gdoc-menu-header__home">
+          <a href="{{ .Root.Site.Home.Permalink }}" class="gdoc-header__link">
+            <svg class="gdoc-icon gdoc_home">
+              <title>{{ i18n "button_homepage" }}</title>
+              <use xlink:href="#gdoc_home"></use>
+            </svg>
+          </a>
+        </span>
+
+        {{ partial "language" .Root }}
+      </span>
+      <span class="gdoc-menu-header__control">
+        <label for="menu-header-control">
+          <div tabindex="0" role="button" aria-pressed="false">
+            <input type="checkbox" class="hidden" id="menu-header-control" />
+
+            <svg class="gdoc-icon gdoc_keyboard_arrow_right">
+              <use xlink:href="#gdoc_keyboard_arrow_right"></use>
+              <title>{{ i18n "button_menu_close" }}</title>
+            </svg>
+
+            <svg class="gdoc-icon gdoc_keyboard_arrow_left">
+              <use xlink:href="#gdoc_keyboard_arrow_left"></use>
+              <title>{{ i18n "button_menu_open" }}</title>
+            </svg>
+          </div>
+        </label>
+      </span>
+    </div>
+  </div>
+</header>

@@ -1,0 +1,34 @@
+# ImgForge Documentation - Geekdoc Configuration
+
+# Site Information
+title = "ImgForge Documentation"
+description = "Documentation for ImgForge - A .NET tool for producing images from templates with text overlays"
+
+# Geekdoc configuration
+geekdocRepo = "https://github.com/ardalis/ImgForge"
+geekdocEditPath = "edit/main/docs/content"
+geekdocDateFormat = "January 2, 2006"
+
+# Features
+geekdocSearch = true
+geekdocSearchShowParent = true
+geekdocDarkMode = true
+geekdocDarkModeToggle = true
+geekdocDarkModeCode = true
+
+# Navigation
+geekdocBreadcrumb = true
+geekdocNextPrev = true
+geekdocMenuBundle = false
+geekdocTagsToMenu = false
+
+# TOC
+geekdocToC = true
+geekdocToCDepth = 3
+
+# Footer
+geekdocBackToTop = true
+
+# Metadata
+[geekdocContentLicense]
+  name = "Copyright (c) 2026 Steve 'Ardalis' Smith"

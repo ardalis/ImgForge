@@ -1,0 +1,3 @@
+# Hugo production configuration
+# Use "/" for baseURL to ensure relative links work on any domain (Cloudflare Pages, custom domain, etc.)
+baseURL = "/"
