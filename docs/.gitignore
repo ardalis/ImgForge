@@ -3,9 +3,6 @@
 /resources/
 .hugo_build.lock
 
-# Hugo theme (downloaded via serve.cs / CI - not committed)
-/themes/
-
 # Hugo module vendor (no longer used)
 /_vendor/
 
