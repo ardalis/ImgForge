@@ -5,6 +5,7 @@ title = "ImgForge Documentation"
 description = "Documentation for ImgForge - A .NET tool for producing images from templates with text overlays"
 
 # Geekdoc configuration
+geekdocLogo = "img/ardalis-icon-128x128.png"
 geekdocRepo = "https://github.com/ardalis/ImgForge"
 geekdocEditPath = "edit/main/docs/content"
 geekdocDateFormat = "January 2, 2006"
