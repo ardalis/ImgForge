@@ -4,6 +4,8 @@ title: "Documentation"
 
 # ImgForge Documentation
 
+![ImgForge](/img/imgforge-github.png)
+
 ImgForge is a .NET CLI tool for generating blog and YouTube thumbnail images from HTML templates.
 
 ---
