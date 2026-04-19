@@ -48,6 +48,14 @@
   background-color: #ffffff;
 }
 
+/* White circular background behind header logo for contrast against turquoise */
+.gdoc-brand__img {
+  background-color: #ffffff;
+  border-radius: 50%;
+  padding: 3px;
+  box-sizing: content-box;
+}
+
 /* Align dark mode toggle with custom icons */
 #gdoc-color-theme {
   display: inline-flex;
