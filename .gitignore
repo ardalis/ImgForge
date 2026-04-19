@@ -3,9 +3,6 @@
 ##
 ## Get latest from https://github.com/github/gitignore/blob/main/VisualStudio.gitignore
 
-# Hugo themes (belong in docs/ only)
-themes/
-
 # User-specific files
 *.rsuser
 *.suo
