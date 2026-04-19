@@ -2,6 +2,47 @@
 
 A .NET CLI tool for generating blog and YouTube thumbnail images from HTML templates.
 
+## Getting Started
+
+Install as a global tool:
+
+```bash
+dotnet tool install --global ImgForge
+```
+
+Or run directly from NuGet via DNX (requires `--` before the arguments that should be sent to `imgforge`):
+
+```bash
+dnx -y imgforge -- generate --help
+```
+
+### Quick Examples
+
+Generate a blog post Open Graph image with a random background:
+
+```bash
+dnx -y imgforge -- generate --template blog --title "Getting Started with ImgForge" --bg random --format blog
+```
+
+Create a YouTube thumbnail:
+
+```bash
+dnx -y imgforge -- generate --template youtube --title "How to Build Better Software" --bg random --format youtube
+```
+
+Generate a blog card with subtitle and headshot:
+
+```bash
+dnx -y imgforge -- generate --template blog-subtitle \
+  --title "Advanced .NET Patterns" \
+  --subtitle "A practical guide" \
+  --bg random \
+  --headshot ./photo.jpg \
+  --format blog
+```
+
+All three built-in templates (`blog`, `youtube`, `blog-subtitle`) work immediately without any additional setup. Chromium is downloaded automatically on first run.
+
 ## How It Works
 
 ImgForge follows a three-stage pipeline:
@@ -90,13 +131,13 @@ If neither `--format` nor explicit dimensions are provided, the tool prompts you
 
 Ideal dimensions vary by platform and use case. Use `--width` and `--height` to match:
 
-| Use Case | Width | Height | Aspect Ratio | Template | Notes |
-|---|---|---|---|---|---|
-| **YouTube Video Thumbnail** | 1280 | 720 | 16:9 | `templates/youtube-bold.html` | Minimum 640×360; displayed at up to 1280×720 |
-| **Blog / Open Graph (og:image)** | 1200 | 630 | ~1.91:1 | `templates/blog-gradient.html` | Recommended by Facebook, LinkedIn, Slack, and most social crawlers. Twitter also accepts this size. |
-| **GitHub Repository Social Preview** | 1280 | 640 | 2:1 | `templates/github-social.html` | Displayed at 640×320 on repository pages |
-| **Podcast Show Art** | 3000 | 3000 | 1:1 | `templates/podcast-show.html` | Apple Podcasts minimum 1400×1400; Spotify and most platforms prefer 3000×3000, max 512 KB |
-| **Podcast Episode Art** | 3000 | 3000 | 1:1 | `templates/podcast-episode.html` | Same requirements as show art; some hosts fall back to show art if omitted |
+| Use Case | Width | Height | Aspect Ratio | Built-in Template | Repository Template | Notes |
+|---|---|---|---|---|---|---|
+| **YouTube Video Thumbnail** | 1280 | 720 | 16:9 | `youtube` | `youtube-bold.html` | Minimum 640×360; displayed at up to 1280×720 |
+| **Blog / Open Graph (og:image)** | 1200 | 630 | ~1.91:1 | `blog`, `blog-subtitle` | `blog-gradient.html` | Recommended by Facebook, LinkedIn, Slack, and most social crawlers. Twitter also accepts this size. |
+| **GitHub Repository Social Preview** | 1280 | 640 | 2:1 | — | `github-social.html` | Displayed at 640×320 on repository pages |
+| **Podcast Show Art** | 3000 | 3000 | 1:1 | — | `podcast-show.html` | Apple Podcasts minimum 1400×1400; Spotify and most platforms prefer 3000×3000, max 512 KB |
+| **Podcast Episode Art** | 3000 | 3000 | 1:1 | — | `podcast-episode.html` | Same requirements as show art; some hosts fall back to show art if omitted |
 
 ### Quick reference commands
 
@@ -148,11 +189,44 @@ imgforge generate --template youtube --title "This is the title of the show" --f
 
 ## Built-in Templates
 
-| Name | Default dimensions | Description |
-|---|---|---|
-| `blog` | 1200×630 | Open Graph / social preview card |
-| `youtube` | 1280×720 | YouTube thumbnail |
-| `blog-subtitle` | 1200×630 | Open Graph card with faded background, optional subtitle, and headshot support |
+ImgForge includes **3 embedded templates** that are always available when you install the tool:
+
+| Template Name | Default Dimensions | Description | Usage |
+|---|---|---|---|
+| `blog` | 1200×630 | Open Graph / social preview card with centered title | `--template blog` |
+| `youtube` | 1280×720 | YouTube thumbnail with bold title styling | `--template youtube` |
+| `blog-subtitle` | 1200×630 | Open Graph card with faded background, optional subtitle, and headshot support | `--template blog-subtitle` |
+
+These templates are embedded in the tool's DLL and work immediately after installation—no need to download template files.
+
+### Example Usage
+
+```bash
+# Simple blog Open Graph image
+imgforge generate --template blog --title "My Blog Post" --bg random --format blog
+
+# YouTube thumbnail
+imgforge generate --template youtube --title "My Video Title" --bg random --format youtube
+
+# Blog card with subtitle and headshot
+imgforge generate --template blog-subtitle \
+  --title "Building Modular Monoliths" \
+  --subtitle "A Practical Guide" \
+  --bg ./cover.jpg \
+  --headshot ./author.jpg \
+  --format blog
+```
+
+### Additional Templates in Repository
+
+The repository's `templates/` folder contains additional example templates (like `youtube-bold.html`, `podcast-episode.html`, `github-social.html`) that are **not embedded** in the tool. To use these, either:
+
+1. **Copy them from the repository** and reference by file path:
+   ```bash
+   imgforge generate --template ./templates/youtube-bold.html --title "My Title" --format youtube
+   ```
+
+2. **Clone the repo** and run from source to access all example templates
 
 ## Custom Templates
 
@@ -230,13 +304,28 @@ dotnet test
 
 ```bash
 dotnet tool install --global ImgForge
-imgforge generate --template blog --title "Hello!" --out hello.png
+imgforge generate --template blog --title "Hello!" --bg random --format blog
 ```
 
 Chromium is downloaded automatically on the first run — no separate install step needed.
 
 ## Run Directly from NuGet via DNX
 
+You can run ImgForge without installing it globally:
+
 ```bash
-dnx -y imgforge generate --template blog --title "Hello!" --out hello.png
+# Simple example
+dnx -y imgforge -- generate --template blog --title "Hello World" --bg random --format blog
+
+# YouTube thumbnail
+dnx -y imgforge -- generate --template youtube --title "My Video" --bg random --format youtube
+
+# Blog post with subtitle
+dnx -y imgforge -- generate --template blog-subtitle \
+  --title "Advanced Techniques" \
+  --subtitle "Learn the secrets" \
+  --bg random \
+  --format blog
 ```
+
+The `-y` flag automatically accepts any prompts, making it perfect for quick one-off image generation.
