@@ -182,7 +182,7 @@ public static class GenerateCommand
         return cmd;
     }
 
-    private static (int Width, int Height)? ResolvePresetDimensions(string? format) =>
+    internal static (int Width, int Height)? ResolvePresetDimensions(string? format) =>
         format?.ToLowerInvariant() switch
         {
             "youtube"          => (1280, 720),

@@ -10,6 +10,7 @@
     <PackageReference Include="SixLabors.ImageSharp" />
     <PackageReference Include="xunit" />
     <PackageReference Include="xunit.runner.visualstudio" />
+    <ProjectReference Include="..\..\src\ImgForge\ImgForge.csproj" />
     <ProjectReference Include="..\..\src\ImgForge.Core\ImgForge.Core.csproj" />
   </ItemGroup>
 
