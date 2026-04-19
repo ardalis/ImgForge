@@ -3,8 +3,6 @@ title: "Usage"
 weight: 20
 ---
 
-# Usage
-
 Complete reference for the `imgforge generate` command.
 
 ## Basic Command Structure

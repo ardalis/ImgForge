@@ -3,8 +3,6 @@ title: "Getting Started"
 weight: 10
 ---
 
-# Getting Started
-
 Get up and running with ImgForge in minutes.
 
 ## Installation

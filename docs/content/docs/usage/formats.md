@@ -1,9 +1,7 @@
 ---
 title: "Format Presets"
-weight: 40
+weight: 20
 ---
-
-# Format Presets
 
 Use `--format <name>` to set width and height based on platform-specific presets. Explicit `--width` and `--height` always override the preset.
 

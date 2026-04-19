@@ -1,9 +1,7 @@
 ---
 title: "Templates"
-weight: 30
+weight: 10
 ---
-
-# Templates
 
 ImgForge supports both built-in templates and custom HTML templates.
 

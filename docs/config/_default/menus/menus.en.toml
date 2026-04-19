@@ -17,7 +17,7 @@
 # Sidebar navigation for docs section
 [[sidebar_docs]]
   name = "Introduction"
-  pageRef = "/docs"
+  pageRef = "/docs/introduction"
   weight = 1
 
 [[sidebar_docs]]
@@ -32,18 +32,26 @@
 
 [[sidebar_docs]]
   name = "Templates"
-  pageRef = "/docs/templates"
-  weight = 30
+  pageRef = "/docs/usage/templates"
+  parent = "Usage"
+  weight = 21
 
 [[sidebar_docs]]
   name = "Format Presets"
-  pageRef = "/docs/formats"
-  weight = 40
+  pageRef = "/docs/usage/formats"
+  parent = "Usage"
+  weight = 22
+
+[[sidebar_docs]]
+  name = "Development"
+  pageRef = "/docs/development"
+  weight = 30
 
 [[sidebar_docs]]
   name = "Build and Test"
-  pageRef = "/docs/build-and-test"
-  weight = 50
+  pageRef = "/docs/development/build-and-test"
+  parent = "Development"
+  weight = 31
 
 # Social links
 [[social]]

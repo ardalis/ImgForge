@@ -1,9 +1,7 @@
 ---
 title: "Build and Test"
-weight: 50
+weight: 10
 ---
-
-# Build and Test
 
 Information for developers working on ImgForge.
 
