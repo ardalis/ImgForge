@@ -156,7 +156,7 @@ imgforge generate --template youtube --title "This is the title of the show" --f
 
 ## Custom Templates
 
-Any `.html` file (or a folder with a `template.html` file in it) can be used as a template. Scriban Liquid syntax is supported for variable injection:
+Any `.html` file (or a folder with a `template.html` file in it) can be used as a template. If you omit `--template`, ImgForge uses `/.imgforge/index.html` as the default custom template path. Scriban Liquid syntax is supported for variable injection:
 
 ```html
 <html>
