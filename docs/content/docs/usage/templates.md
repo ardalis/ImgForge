@@ -161,9 +161,11 @@ Inside `template.html`, you can reference files in the same directory:
 
 ## Default Template Path
 
-If you omit `--template`, ImgForge looks for a default custom template in the current directory, following the [`.tools/` directory spec](https://github.com/tools-dir/spec):
+If you omit `--template`, ImgForge looks for a default custom template starting in the current directory, following the [`.tools/` directory spec](https://github.com/tools-dir/spec):
 
 1. `.tools/imgforge/template.html` (recommended)
 2. `.imgforge/template.html` (legacy location, still supported)
 
-If both exist, `.tools/imgforge/template.html` takes precedence. To migrate, move your `.imgforge/` folder to `.tools/imgforge/`; relative asset references inside the template keep working because they resolve against the template's own folder.
+If neither exists in the current directory and you are inside a git repository, ImgForge checks each parent directory in turn, up to and including the repository root (the nearest directory containing `.git`), so you can run it from any subdirectory. It never searches above the repository root, and outside a repository only the current directory is checked. The nearest match wins; within a single directory, `.tools/imgforge/template.html` takes precedence over `.imgforge/template.html`.
+
+To migrate, move your `.imgforge/` folder to `.tools/imgforge/`; relative asset references inside the template keep working because they resolve against the template's own folder.
