@@ -21,7 +21,7 @@ public static class GenerateCommand
         var templateOpt = new Option<string?>(
             name: "--template",
             description: "Built-in template name (blog, youtube) or path to a .html file. " +
-                         "If omitted, defaults to .imgforge/template.html when it exists.");
+                         "If omitted, defaults to .tools/imgforge/template.html (or legacy .imgforge/template.html) when it exists.");
 
         var titleOpt = new Option<string>(
             name: "--title",
@@ -132,6 +132,10 @@ public static class GenerateCommand
                 if (usedDefaultTemplate)
                 {
                     Console.WriteLine($"No --template provided; using default template at '{resolvedTemplate}'.");
+                    if (resolvedTemplate == TemplatePathResolver.LegacyTemplatePath)
+                    {
+                        Console.WriteLine("Tip: '.imgforge/' is a legacy location; consider moving it to '.tools/imgforge/' (https://github.com/tools-dir/spec).");
+                    }
                 }
 
                 // Resolve dimensions: explicit flags > --format > interactive prompt

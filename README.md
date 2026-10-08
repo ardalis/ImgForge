@@ -76,7 +76,6 @@ ImageGenerator    (PuppeteerSharp: loads HTML in headless Chromium, screenshots 
 | [Scriban](https://github.com/scriban/scriban) | Liquid-syntax template engine — substitutes `{{ title }}`, `{{ bg }}`, `{{ width }}`, `{{ height }}`, and `{% for img in overlays %}` in HTML templates |
 | [PuppeteerSharp](https://github.com/hardkoded/puppeteer-sharp) | Headless Chromium driver — renders the HTML with full CSS support and captures a pixel-perfect screenshot. Chromium is downloaded automatically on first run. |
 | [System.CommandLine](https://github.com/dotnet/command-line-api) | Parses CLI arguments and subcommands |
-| [SixLabors.ImageSharp](https://github.com/SixLabors/ImageSharp) | Used in tests to verify output PNG dimensions |
 | [xunit](https://xunit.net/) | Test framework |
 
 ## Usage
@@ -232,7 +231,14 @@ The repository's `templates/` folder contains additional example templates (like
 
 ## Custom Templates
 
-Any `.html` file (or a folder with a `template.html` file in it) can be used as a template. If you omit `--template`, ImgForge uses `/.imgforge/index.html` as the default custom template path. Scriban Liquid syntax is supported for variable injection:
+Any `.html` file (or a folder with a `template.html` file in it) can be used as a template. If you omit `--template`, ImgForge looks for a default template relative to the current directory, following the [`.tools/` directory spec](https://github.com/tools-dir/spec):
+
+1. `.tools/imgforge/template.html` (recommended)
+2. `.imgforge/template.html` (legacy location, still supported)
+
+If both exist, `.tools/imgforge/template.html` takes precedence.
+
+Scriban Liquid syntax is supported for variable injection:
 
 ```html
 <html>
