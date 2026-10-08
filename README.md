@@ -1,5 +1,7 @@
 # ImgForge
 
+[![NuGet](https://img.shields.io/nuget/v/ImgForge.svg)](https://www.nuget.org/packages/ImgForge)
+
 A .NET CLI tool for generating blog and YouTube thumbnail images from HTML templates.
 
 [Read the full docs](https://imgforge.ardalis.com/docs/) [View on NuGet](https://www.nuget.org/packages/ImgForge)
@@ -82,12 +84,12 @@ ImageGenerator    (PuppeteerSharp: loads HTML in headless Chromium, screenshots 
 
 ```bash
 imgforge generate \
-  --template blog \             # built-in name ("blog", "youtube") or path to a .html file or folder (with a template.html file in it)
+  --template blog \             # built-in name ("blog", "youtube", "blog-subtitle") or path to a .html file or folder (with a template.html file in it); optional if a default template exists
   --title "Modular Monoliths Done Right" \
   --subtitle "A practical guide" \  # optional subtitle rendered below the title in templates that support it
   --bg ./images/cover.jpg \     # local path, HTTP(S) URL, or "random" (fetches a random image from picsum.photos); optional
-  --overlay ./logo.png \        # optional; repeat for multiple overlays
-  --headshot ./guest.jpg \      # optional guest headshot; placed in a styled circle
+  --overlay https://example.com/logo.png \  # optional; repeat for multiple overlays; passed to the template as-is
+  --headshot ./guest.jpg \      # optional guest headshot (local path or URL); placed in the template's headshot slot
   --headshot-filter blue-mono \ # built-in: blue-mono (default), mono, none — or a raw CSS filter string
   --var season=3 \              # arbitrary key=value pairs injected as {{ vars.season }} in templates; repeat for multiple
   --format podcast-episode \    # sets width/height from a named preset (see formats below)
@@ -101,24 +103,24 @@ imgforge generate \
 
 | Flag | Required | Default | Description |
 |---|---|---|---|
-| `--template` | Yes | — | Built-in template name (`blog`, `youtube`, `blog-subtitle`) or path to a `.html` file or a directory containing `template.html` |
+| `--template` | No | `.tools/imgforge/template.html` | Built-in template name (`blog`, `youtube`, `blog-subtitle`) or path to a `.html` file or a directory containing `template.html`. If omitted, a default template is looked up (see [Custom Templates](#custom-templates)); it's an error if none is found |
 | `--title` | Yes | — | Main heading text injected into the template |
 | `--subtitle` | No | — | Optional subtitle rendered below the title in templates that support it (e.g. `blog-subtitle`) |
 | `--bg` | No | — | Background image: local file path, HTTP(S) URL, or `random` (fetches a random image from [picsum.photos](https://picsum.photos)) |
-| `--overlay` | No | — | Overlay image path. Repeatable for multiple overlays |
-| `--headshot` | No | — | Guest headshot image path placed in the template's headshot slot |
+| `--overlay` | No | — | Overlay image source. Repeatable for multiple overlays. Passed to the template as-is (see [Overlay Images](#overlay-images)) |
+| `--headshot` | No | — | Guest headshot image (local path or HTTP(S) URL) placed in the template's headshot slot |
 | `--headshot-filter` | No | `blue-mono` | Filter applied to the headshot. Built-in: `blue-mono`, `mono`, `none`. Or supply a raw CSS `filter` string |
 | `--var` | No | — | Arbitrary template variable as `key=value` (e.g. `--var episode=42`). Accessible in templates as `{{ vars.episode }}`. Repeatable |
-| `--format` | No | — | Output format preset that sets width and height. Choices: `youtube`, `blog`, `github`, `podcast-show`, `podcast-episode`. Explicit `--width`/`--height` override the preset |
+| `--format` | No | — | Output format preset that sets width and height. Choices: `youtube`, `blog` (alias `og`), `github`, `podcast-show`, `podcast-episode`. Explicit `--width`/`--height` override the preset |
 | `--out` | No | title slug `.png` | Output PNG file path |
 | `--out-dir` | No | `.` | Output directory. Filename is derived from `--title`. Ignored if `--out` is provided |
-| `--width` | No | `1200` | Viewport width in pixels. Overrides `--format` |
-| `--height` | No | `630` | Viewport height in pixels. Overrides `--format` |
+| `--width` | No | from `--format` | Viewport width in pixels. Overrides `--format`. With no `--format`, `--width`, or `--height`, you're prompted to pick a format; if only `--height` is given, width falls back to `1200` |
+| `--height` | No | from `--format` | Viewport height in pixels. Overrides `--format`. With no `--format`, `--width`, or `--height`, you're prompted to pick a format; if only `--width` is given, height falls back to `630` |
 
 ### Format presets
 
 Use `--format <name>` instead of `--width`/`--height`. Explicit dimensions always override the preset.
-If neither `--format` nor explicit dimensions are provided, the tool prompts you interactively.
+If neither `--format` nor explicit dimensions are provided, the tool prompts you to pick one of these presets from a numbered list.
 
 | `--format` value | Width | Height | Use case |
 |---|---|---|---|
@@ -127,6 +129,10 @@ If neither `--format` nor explicit dimensions are provided, the tool prompts you
 | `github` | 1280 | 640 | GitHub repository social preview |
 | `podcast-show` | 3000 | 3000 | Podcast show art |
 | `podcast-episode` | 3000 | 3000 | Podcast episode art |
+
+### Overlay images
+
+`--overlay` values are passed to the template unchanged (unlike `--bg` and `--headshot`, they are not converted to `file:///` URIs). The page is rendered from a temporary file, so a relative path like `./logo.png` won't resolve with the built-in templates. Use an HTTP(S) URL or a `file:///` URI; with a file or folder template, relative paths resolve against the template's folder.
 
 ## Image Dimension Reference
 
@@ -192,13 +198,13 @@ imgforge generate --template youtube --title "This is the title of the show" --f
 
 ImgForge includes **3 embedded templates** that are always available when you install the tool:
 
-| Template Name | Default Dimensions | Description | Usage |
+| Template Name | Designed For | Description | Usage |
 |---|---|---|---|
 | `blog` | 1200×630 | Open Graph / social preview card with centered title | `--template blog` |
 | `youtube` | 1280×720 | YouTube thumbnail with bold title styling | `--template youtube` |
 | `blog-subtitle` | 1200×630 | Open Graph card with faded background, optional subtitle, and headshot support | `--template blog-subtitle` |
 
-These templates are embedded in the tool's DLL and work immediately after installation—no need to download template files.
+These templates are embedded in the tool's DLL and work immediately after installation—no need to download template files. Templates don't set the output size, so pass the matching `--format` (or `--width`/`--height`).
 
 ### Example Usage
 
@@ -264,11 +270,11 @@ Scriban Liquid syntax is supported for variable injection:
 |---|---|---|
 | `title` | `string` | Main heading text |
 | `subtitle` | `string` | Optional subtitle text — empty string when `--subtitle` is not supplied; guard with `{% if subtitle %}` in templates |
-| `bg` | `string` | Background image URI — local `file:///` paths, HTTP(S) URLs, and random picsum URLs are all resolved before injection |
+| `bg` | `string` | Background image URI — local paths become `file:///` URIs, HTTP(S) URLs are passed through, and `random` becomes `https://picsum.photos/{width}/{height}`. Empty string when `--bg` is not supplied |
 | `width` | `int` | Viewport width in pixels |
 | `height` | `int` | Viewport height in pixels |
-| `overlays` | array | List of `{ src, style }` overlay image objects |
-| `headshot` | object or `null` | Guest headshot — exposes `headshot.src` (file URI) and `headshot.filter_css` (CSS filter string). `null` when `--headshot` is not supplied |
+| `overlays` | array | List of `{ src, style }` overlay image objects, one per `--overlay`. `src` is the command-line value, unchanged; `style` is always empty from the CLI |
+| `headshot` | object or `null` | Guest headshot — exposes `headshot.src` (`file:///` URI for local paths; URLs are passed through) and `headshot.filter_css` (CSS filter string). `null` when `--headshot` is not supplied |
 | `vars` | object | Arbitrary key/value pairs supplied via `--var key=value`. Access as `{{ vars.key }}` |
 
 ### Headshot filters
@@ -358,4 +364,4 @@ dnx -y imgforge -- generate --template blog-subtitle \
   --format blog
 ```
 
-The `-y` flag automatically accepts any prompts, making it perfect for quick one-off image generation.
+The `-y` flag accepts DNX's package download confirmation, making it perfect for quick one-off image generation. It doesn't answer ImgForge's own format prompt, so pass `--format` (or `--width`/`--height`) when running non-interactively.

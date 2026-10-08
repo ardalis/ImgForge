@@ -35,7 +35,7 @@ dnx -y imgforge -- generate --template blog --title "Hello World" --bg random --
 dnx -y imgforge -- generate --template youtube --title "My Video" --bg random --format youtube
 ```
 
-The `-y` flag automatically accepts any prompts. Note the `--` before the arguments that should be sent to `imgforge`.
+The `-y` flag accepts DNX's package download confirmation (it doesn't answer ImgForge's own format prompt, so pass `--format`). Note the `--` before the arguments that should be sent to `imgforge`.
 
 ## Quick Examples
 
@@ -74,6 +74,6 @@ All three built-in templates (`blog`, `youtube`, `blog-subtitle`) work immediate
 
 ## Next Steps
 
-- [Usage Guide](usage) — Learn about all available options and flags
-- [Templates](templates) — Explore built-in templates and create your own
-- [Format Presets](formats) — Understand dimension presets for different platforms
+- [Usage Guide](../usage/) — Learn about all available options and flags
+- [Templates](../usage/templates/) — Explore built-in templates and create your own
+- [Format Presets](../usage/formats/) — Understand dimension presets for different platforms

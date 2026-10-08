@@ -9,7 +9,7 @@ Complete reference for the `imgforge generate` command.
 
 ```bash
 imgforge generate \
-  --template blog \             # built-in name or path to .html file/folder
+  --template blog \             # built-in name or path to .html file/folder; optional if a default template exists
   --title "My Title" \
   --bg ./cover.jpg \            # optional background image
   --format blog \               # dimension preset
@@ -20,19 +20,19 @@ imgforge generate \
 
 | Flag | Required | Default | Description |
 |---|---|---|---|
-| `--template` | Yes | — | Built-in template name (`blog`, `youtube`, `blog-subtitle`) or path to a `.html` file or a directory containing `template.html` |
+| `--template` | No | `.tools/imgforge/template.html` | Built-in template name (`blog`, `youtube`, `blog-subtitle`) or path to a `.html` file or a directory containing `template.html`. If omitted, a default template is looked up (see [Default Template Path](templates/#default-template-path)); it's an error if none is found |
 | `--title` | Yes | — | Main heading text injected into the template |
 | `--subtitle` | No | — | Optional subtitle rendered below the title in templates that support it (e.g. `blog-subtitle`) |
 | `--bg` | No | — | Background image: local file path, HTTP(S) URL, or `random` (fetches a random image from [picsum.photos](https://picsum.photos)) |
-| `--overlay` | No | — | Overlay image path. Repeatable for multiple overlays |
-| `--headshot` | No | — | Guest headshot image path placed in the template's headshot slot |
+| `--overlay` | No | — | Overlay image source. Repeatable for multiple overlays. Passed to the template as-is (see [Overlay Images](#overlay-images)) |
+| `--headshot` | No | — | Guest headshot image (local path or HTTP(S) URL) placed in the template's headshot slot |
 | `--headshot-filter` | No | `blue-mono` | Filter applied to the headshot. Built-in: `blue-mono`, `mono`, `none`. Or supply a raw CSS `filter` string |
 | `--var` | No | — | Arbitrary template variable as `key=value` (e.g. `--var episode=42`). Accessible in templates as `{{ vars.episode }}`. Repeatable |
 | `--format` | No | — | Output format preset that sets width and height. See [Format Presets](formats) for options |
 | `--out` | No | title slug `.png` | Output PNG file path |
 | `--out-dir` | No | `.` | Output directory. Filename is derived from `--title`. Ignored if `--out` is provided |
-| `--width` | No | `1200` | Viewport width in pixels. Overrides `--format` |
-| `--height` | No | `630` | Viewport height in pixels. Overrides `--format` |
+| `--width` | No | from `--format` | Viewport width in pixels. Overrides `--format`. With no `--format`, `--width`, or `--height`, you're prompted to pick a format; if only `--height` is given, width falls back to `1200` |
+| `--height` | No | from `--format` | Viewport height in pixels. Overrides `--format`. With no `--format`, `--width`, or `--height`, you're prompted to pick a format; if only `--width` is given, height falls back to `630` |
 
 ## Background Images
 
@@ -96,14 +96,18 @@ Add one or more overlay images:
 ```bash
 # Single overlay
 imgforge generate --template blog --title "My Post" \
-  --overlay ./logo.png --format blog
+  --overlay https://example.com/logo.png --format blog
 
 # Multiple overlays
 imgforge generate --template blog --title "My Post" \
-  --overlay ./logo.png \
-  --overlay ./badge.png \
+  --overlay https://example.com/logo.png \
+  --overlay https://example.com/badge.png \
   --format blog
 ```
+
+{{< hint type=note >}}
+`--overlay` values are passed to the template unchanged (unlike `--bg` and `--headshot`, they are not converted to `file:///` URIs). The page is rendered from a temporary file, so a relative path like `./logo.png` won't resolve with the built-in templates. Use an HTTP(S) URL or a `file:///` URI; with a file or folder template, relative paths resolve against the template's folder.
+{{< /hint >}}
 
 ## Custom Variables
 
@@ -178,7 +182,7 @@ imgforge generate --template templates/podcast-episode.html \
 
 ### Interactive Mode
 
-Omit `--format` and `--width`/`--height` to be prompted interactively:
+Omit `--format` and `--width`/`--height` to be prompted to pick a format preset from a numbered list:
 
 ```bash
 imgforge generate --template blog --title "My Post" --out out.png

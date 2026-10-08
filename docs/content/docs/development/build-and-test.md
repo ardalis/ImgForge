@@ -45,13 +45,13 @@ Chromium is downloaded automatically on the first run of integration tests — n
 After building, you can install your local build as a global tool:
 
 ```bash
-dotnet pack
-dotnet tool install --global --add-source ./nupkg ImgForge
+dotnet pack src/ImgForge -o ./nupkg
+dotnet tool install --global --add-source ./nupkg --prerelease ImgForge
 ```
 
 Or update an existing installation:
 
 ```bash
-dotnet pack
-dotnet tool update --global --add-source ./nupkg ImgForge
+dotnet pack src/ImgForge -o ./nupkg
+dotnet tool update --global --add-source ./nupkg --prerelease ImgForge
 ```
