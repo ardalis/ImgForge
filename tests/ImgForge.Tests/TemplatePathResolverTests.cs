@@ -22,7 +22,7 @@ public class TemplatePathResolverTests
         using var cwd = new WorkingDirectoryScope();
         cwd.CreateFile(".tools/imgforge/template.html");
 
-        var result = TemplatePathResolver.ResolveTemplate(null);
+        var result = Resolve(cwd);
 
         Assert.Equal(".tools/imgforge/template.html", result.Template);
         Assert.True(result.UsedDefault);
@@ -34,7 +34,7 @@ public class TemplatePathResolverTests
         using var cwd = new WorkingDirectoryScope();
         cwd.CreateFile(".imgforge/template.html");
 
-        var result = TemplatePathResolver.ResolveTemplate(null);
+        var result = Resolve(cwd);
 
         Assert.Equal(".imgforge/template.html", result.Template);
         Assert.True(result.UsedDefault);
@@ -47,7 +47,7 @@ public class TemplatePathResolverTests
         cwd.CreateFile(".tools/imgforge/template.html");
         cwd.CreateFile(".imgforge/template.html");
 
-        var result = TemplatePathResolver.ResolveTemplate(null);
+        var result = Resolve(cwd);
 
         Assert.Equal(".tools/imgforge/template.html", result.Template);
         Assert.True(result.UsedDefault);
@@ -56,13 +56,13 @@ public class TemplatePathResolverTests
     [Fact]
     public void ResolveTemplate_WhenMissingAndNoDefault_ThrowsHelpfulMessage()
     {
-        using var _ = new WorkingDirectoryScope();
+        using var cwd = new WorkingDirectoryScope();
 
-        var ex = Assert.Throws<ArgumentException>(() => TemplatePathResolver.ResolveTemplate(null));
+        var ex = Assert.Throws<ArgumentException>(() => Resolve(cwd));
 
         Assert.Equal(
             "No template was provided on the command line and no default template exists at '.tools/imgforge/template.html' or '.imgforge/template.html' " +
-            "in the current directory or any parent directory up to the repository root.",
+            "in the current directory (not inside a git repository, so parent directories were not searched).",
             ex.Message);
     }
 
@@ -74,7 +74,7 @@ public class TemplatePathResolverTests
         cwd.CreateFile(".tools/imgforge/template.html");
         cwd.ChangeTo("src/nested");
 
-        var result = TemplatePathResolver.ResolveTemplate(null);
+        var result = Resolve(cwd);
 
         Assert.Equal(cwd.FullPathOf(".tools/imgforge/template.html"), result.Template);
         Assert.True(result.UsedDefault);
@@ -88,7 +88,7 @@ public class TemplatePathResolverTests
         cwd.CreateFile(".tools/imgforge/template.html");
         cwd.ChangeTo("src");
 
-        var result = TemplatePathResolver.ResolveTemplate(null);
+        var result = Resolve(cwd);
 
         Assert.Equal(cwd.FullPathOf(".tools/imgforge/template.html"), result.Template);
     }
@@ -101,7 +101,7 @@ public class TemplatePathResolverTests
         cwd.CreateFile(".imgforge/template.html");
         cwd.ChangeTo("src");
 
-        var result = TemplatePathResolver.ResolveTemplate(null);
+        var result = Resolve(cwd);
 
         Assert.Equal(cwd.FullPathOf(".imgforge/template.html"), result.Template);
         Assert.True(TemplatePathResolver.IsLegacyTemplatePath(result.Template));
@@ -116,7 +116,7 @@ public class TemplatePathResolverTests
         cwd.CreateFile("src/.imgforge/template.html");
         cwd.ChangeTo("src/nested");
 
-        var result = TemplatePathResolver.ResolveTemplate(null);
+        var result = Resolve(cwd);
 
         Assert.Equal(cwd.FullPathOf("src/.imgforge/template.html"), result.Template);
     }
@@ -129,7 +129,7 @@ public class TemplatePathResolverTests
         cwd.CreateDirectory("repo/.git");
         cwd.ChangeTo("repo/src");
 
-        Assert.Throws<ArgumentException>(() => TemplatePathResolver.ResolveTemplate(null));
+        Assert.Throws<ArgumentException>(() => Resolve(cwd));
     }
 
     [Fact]
@@ -139,7 +139,47 @@ public class TemplatePathResolverTests
         cwd.CreateFile(".tools/imgforge/template.html");
         cwd.ChangeTo("src");
 
-        Assert.Throws<ArgumentException>(() => TemplatePathResolver.ResolveTemplate(null));
+        Assert.Throws<ArgumentException>(() => Resolve(cwd));
+    }
+
+    [Fact]
+    public void ResolveTemplate_WhenRepoRootIsCurrentDirectory_ReturnsRelativePath()
+    {
+        using var cwd = new WorkingDirectoryScope();
+        cwd.CreateDirectory(".git");
+        cwd.CreateFile(".tools/imgforge/template.html");
+
+        var result = Resolve(cwd);
+
+        Assert.Equal(".tools/imgforge/template.html", result.Template);
+    }
+
+    [Fact]
+    public void ResolveTemplate_WhenTemplateInCurrentDirectoryAndRepoRoot_PrefersCurrentDirectory()
+    {
+        using var cwd = new WorkingDirectoryScope();
+        cwd.CreateDirectory(".git");
+        cwd.CreateFile(".tools/imgforge/template.html");
+        cwd.CreateFile("src/.tools/imgforge/template.html");
+        cwd.ChangeTo("src");
+
+        var result = Resolve(cwd);
+
+        Assert.Equal(".tools/imgforge/template.html", result.Template);
+    }
+
+    [Fact]
+    public void ResolveTemplate_WhenNestedRepository_StopsAtNearestRepoRoot()
+    {
+        using var cwd = new WorkingDirectoryScope();
+        cwd.CreateDirectory(".git");
+        cwd.CreateFile(".tools/imgforge/template.html");
+        cwd.CreateFile("vendor/lib/.git"); // submodule
+        cwd.ChangeTo("vendor/lib/src");
+
+        var ex = Assert.Throws<ArgumentException>(() => Resolve(cwd));
+
+        Assert.Contains(cwd.FullPathOf("vendor/lib"), ex.Message);
     }
 
     [Theory]
@@ -152,6 +192,10 @@ public class TemplatePathResolverTests
     {
         Assert.Equal(expected, TemplatePathResolver.IsLegacyTemplatePath(path));
     }
+
+    // The temp folder is the search ceiling so a .git above it on the test machine can't affect results.
+    private static (string Template, bool UsedDefault) Resolve(WorkingDirectoryScope cwd) =>
+        TemplatePathResolver.ResolveTemplate(null, ceilingDirectory: cwd.TempPath);
 
     private sealed class WorkingDirectoryScope : IDisposable
     {

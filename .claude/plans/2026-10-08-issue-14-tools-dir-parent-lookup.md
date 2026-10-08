@@ -30,34 +30,58 @@ nothing. Walk up parent directories to the repository root, but never beyond it.
 
 ## Phase 1 — Core resolution (`src/ImgForge.Core/TemplatePathResolver.cs`)
 
-- [ ] Walk from CWD up to (and including) the repo root; stop at CWD when not in a repo.
-- [ ] Return relative path for CWD hits, full path for ancestor hits.
-- [ ] Add `IsLegacyTemplatePath(string)`.
-- [ ] Update the not-found error message to mention the search extends up to the repository root.
-- [ ] Update the `--template` help text and legacy tip in `GenerateCommand`.
+- [x] Walk from CWD up to (and including) the repo root; stop at CWD when not in a repo.
+- [x] Return relative path for CWD hits, full path for ancestor hits.
+- [x] Add `IsLegacyTemplatePath(string)`.
+- [x] Update the not-found error message to mention the search extends up to the repository root.
+- [x] Update the `--template` help text and legacy tip in `GenerateCommand`.
 
 ## Phase 2 — Tests (`tests/ImgForge.Tests/TemplatePathResolverTests.cs`, unit)
 
-- [ ] Existing tests still pass (CWD behavior unchanged).
-- [ ] Template at repo root, run from nested subdirectory → found (full path).
-- [ ] Template above the repo root (outside the repo) → not found; throws.
-- [ ] No `.git` anywhere, template in parent → not found (no walking outside a repo).
-- [ ] Nearer directory wins over repo root.
-- [ ] `.git` as a file (worktree) is treated as a repo root.
-- [ ] Legacy template in a parent directory is found and `IsLegacyTemplatePath` returns true.
+- [x] Existing tests still pass (CWD behavior unchanged).
+- [x] Template at repo root, run from nested subdirectory → found (full path).
+- [x] Template above the repo root (outside the repo) → not found; throws.
+- [x] No `.git` anywhere, template in parent → not found (no walking outside a repo).
+- [x] Nearer directory wins over repo root.
+- [x] `.git` as a file (worktree) is treated as a repo root.
+- [x] Legacy template in a parent directory is found and `IsLegacyTemplatePath` returns true.
 
 ## Phase 3 — Docs
 
-- [ ] README and `docs/content/docs/usage/templates.md`: describe parent-directory lookup up to the repo root.
+- [x] README and `docs/content/docs/usage/templates.md`: describe parent-directory lookup up to the repo root.
 
 ## Phase 4 — Independent review
 
-- [ ] Separate agent (fresh context) reviews the full diff for correctness, missed requirements,
+- [x] Separate agent (fresh context) reviews the full diff for correctness, missed requirements,
       test gaps, security, performance, and accessibility.
-- [ ] Address all significant findings (or record reasons here).
+- [x] Address all significant findings (or record reasons here).
 
 ## Phase 5 — Verification
 
-- [ ] `dotnet build` succeeds.
-- [ ] `dotnet test` passes.
-- [ ] `dotnet format --verify-no-changes` reports nothing for changed files.
+- [x] `dotnet build` succeeds.
+- [x] `dotnet test` passes.
+- [x] `dotnet format --verify-no-changes` reports nothing for changed files.
+
+## Review outcome
+
+No high findings. Addressed:
+
+- Medium: the "not in a repository" test depended on no `.git` existing above the machine's temp folder. Added an
+  internal `ResolveTemplate(template, ceilingDirectory)` overload (via `InternalsVisibleTo` on ImgForge.Core);
+  tests pass the temp folder as the ceiling so results are machine-independent.
+- Low: the not-found error now distinguishes "not inside a git repository" from "searched up to repository root '<path>'".
+- Low: added tests — CWD is the repo root (relative path returned), CWD template beats repo-root template,
+  nested `.git` (submodule) is the search boundary.
+
+Not addressed (by design / acceptable):
+
+- Intermediate directories between CWD and the repo root are searched, nearest wins — intentional, documented.
+- Any `.git` file (without a `gitdir:` line) counts as a root; `GIT_DIR` overrides and bare repos ignored — acceptable CLI default.
+- Symlink/junction CWDs are not resolved to real paths — no practical impact identified.
+- Tests still change the process-wide CWD (pre-existing pattern, not a regression).
+
+## Verification notes
+
+- `dotnet build`: 0 errors. `dotnet test`: 53/53 passed.
+- `dotnet format --verify-no-changes` on changed files: no violations in new code; `GenerateCommand.cs` still reports
+  the 21 pre-existing alignment violations on untouched lines (same count as before this change; CI does not run format).
