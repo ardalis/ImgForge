@@ -106,25 +106,25 @@ public static class GenerateCommand
 
         cmd.SetHandler(async (context) =>
         {
-            var template       = context.ParseResult.GetValueForOption(templateOpt);
-            var title          = context.ParseResult.GetValueForOption(titleOpt)!;
-            var subtitle       = context.ParseResult.GetValueForOption(subtitleOpt);
-            var bg             = context.ParseResult.GetValueForOption(bgOpt);
-            var overlays       = context.ParseResult.GetValueForOption(overlayOpt);
-            var headshot       = context.ParseResult.GetValueForOption(headshotOpt);
+            var template = context.ParseResult.GetValueForOption(templateOpt);
+            var title = context.ParseResult.GetValueForOption(titleOpt)!;
+            var subtitle = context.ParseResult.GetValueForOption(subtitleOpt);
+            var bg = context.ParseResult.GetValueForOption(bgOpt);
+            var overlays = context.ParseResult.GetValueForOption(overlayOpt);
+            var headshot = context.ParseResult.GetValueForOption(headshotOpt);
             var headshotFilter = context.ParseResult.GetValueForOption(headshotFilterOpt)!;
-            var vars           = context.ParseResult.GetValueForOption(varOpt);
-            var format         = context.ParseResult.GetValueForOption(formatOpt);
-            var outDir         = context.ParseResult.GetValueForOption(outDirOpt);
-            var out_           = FileNameHelper.ResolveOutputPath(
+            var vars = context.ParseResult.GetValueForOption(varOpt);
+            var format = context.ParseResult.GetValueForOption(formatOpt);
+            var outDir = context.ParseResult.GetValueForOption(outDirOpt);
+            var out_ = FileNameHelper.ResolveOutputPath(
                                    context.ParseResult.GetValueForOption(outOpt), outDir, title);
 
             // Detect whether --width/--height were explicitly supplied by the user
             // (IsImplicit = true means the value came from getDefaultValue, not the command line)
-            bool widthExplicit  = context.ParseResult.FindResultFor(widthOpt)  is { IsImplicit: false };
+            bool widthExplicit = context.ParseResult.FindResultFor(widthOpt) is { IsImplicit: false };
             bool heightExplicit = context.ParseResult.FindResultFor(heightOpt) is { IsImplicit: false };
 
-            int width  = context.ParseResult.GetValueForOption(widthOpt);
+            int width = context.ParseResult.GetValueForOption(widthOpt);
             int height = context.ParseResult.GetValueForOption(heightOpt);
 
             try
@@ -146,7 +146,7 @@ public static class GenerateCommand
                         ?? (widthExplicit || heightExplicit ? (width, height) : ((int, int)?)null)
                         ?? await PromptForFormatAsync();
 
-                    if (!widthExplicit)  width  = pw;
+                    if (!widthExplicit) width = pw;
                     if (!heightExplicit) height = ph;
                 }
 
@@ -190,12 +190,12 @@ public static class GenerateCommand
     internal static (int Width, int Height)? ResolvePresetDimensions(string? format) =>
         format?.ToLowerInvariant() switch
         {
-            "youtube"          => (1280, 720),
-            "blog" or "og"     => (1200, 630),
-            "github"           => (1280, 640),
-            "podcast-show"     => (3000, 3000),
-            "podcast-episode"  => (3000, 3000),
-            null               => null,
+            "youtube" => (1280, 720),
+            "blog" or "og" => (1200, 630),
+            "github" => (1280, 640),
+            "podcast-show" => (3000, 3000),
+            "podcast-episode" => (3000, 3000),
+            null => null,
             _ => throw new ArgumentException(
                 $"Unknown format '{format}'. Valid choices: youtube, blog, github, podcast-show, podcast-episode.")
         };

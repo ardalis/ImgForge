@@ -8,8 +8,8 @@ public class TemplateRenderer
         new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
             ["blue-mono"] = "grayscale(100%) sepia(100%) hue-rotate(190deg) saturate(300%) brightness(1.15)",
-            ["mono"]      = "grayscale(100%)",
-            ["none"]      = "none"
+            ["mono"] = "grayscale(100%)",
+            ["none"] = "none"
         };
 
     public string Render(GenerateOptions opts)
