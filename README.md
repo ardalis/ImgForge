@@ -2,7 +2,7 @@
 
 A .NET CLI tool for generating blog and YouTube thumbnail images from HTML templates.
 
-[Read the full docs](https://imgforge.ardalis.com/docs/)
+[Read the full docs](https://imgforge.ardalis.com/docs/) [View on NuGet](https://www.nuget.org/packages/ImgForge)
 
 ## Getting Started
 
