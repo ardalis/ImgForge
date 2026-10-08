@@ -7,6 +7,9 @@ public class TemplatePathResolverTests
     [Fact]
     public void ResolveTemplate_WhenProvided_ReturnsProvidedTemplate()
     {
+        using var cwd = new WorkingDirectoryScope();
+        cwd.CreateFile(".tools/imgforge/template.html");
+
         var result = TemplatePathResolver.ResolveTemplate("blog");
 
         Assert.Equal("blog", result.Template);
@@ -14,15 +17,39 @@ public class TemplatePathResolverTests
     }
 
     [Fact]
-    public void ResolveTemplate_WhenMissingAndDefaultExists_ReturnsDefaultTemplate()
+    public void ResolveTemplate_WhenMissingAndToolsDirDefaultExists_ReturnsToolsDirTemplate()
     {
         using var cwd = new WorkingDirectoryScope();
-        Directory.CreateDirectory(Path.Combine(cwd.TempPath, ".imgforge"));
-        File.WriteAllText(Path.Combine(cwd.TempPath, ".imgforge", "template.html"), "<html></html>");
+        cwd.CreateFile(".tools/imgforge/template.html");
+
+        var result = TemplatePathResolver.ResolveTemplate(null);
+
+        Assert.Equal(".tools/imgforge/template.html", result.Template);
+        Assert.True(result.UsedDefault);
+    }
+
+    [Fact]
+    public void ResolveTemplate_WhenMissingAndLegacyDefaultExists_ReturnsLegacyTemplate()
+    {
+        using var cwd = new WorkingDirectoryScope();
+        cwd.CreateFile(".imgforge/template.html");
 
         var result = TemplatePathResolver.ResolveTemplate(null);
 
         Assert.Equal(".imgforge/template.html", result.Template);
+        Assert.True(result.UsedDefault);
+    }
+
+    [Fact]
+    public void ResolveTemplate_WhenMissingAndBothDefaultsExist_PrefersToolsDirTemplate()
+    {
+        using var cwd = new WorkingDirectoryScope();
+        cwd.CreateFile(".tools/imgforge/template.html");
+        cwd.CreateFile(".imgforge/template.html");
+
+        var result = TemplatePathResolver.ResolveTemplate(null);
+
+        Assert.Equal(".tools/imgforge/template.html", result.Template);
         Assert.True(result.UsedDefault);
     }
 
@@ -34,7 +61,7 @@ public class TemplatePathResolverTests
         var ex = Assert.Throws<ArgumentException>(() => TemplatePathResolver.ResolveTemplate(null));
 
         Assert.Equal(
-            "No template was provided on the command line and no default template exists at '.imgforge/template.html'.",
+            "No template was provided on the command line and no default template exists at '.tools/imgforge/template.html' or '.imgforge/template.html'.",
             ex.Message);
     }
 
@@ -47,6 +74,13 @@ public class TemplatePathResolverTests
         {
             Directory.CreateDirectory(TempPath);
             Directory.SetCurrentDirectory(TempPath);
+        }
+
+        public void CreateFile(string relativePath)
+        {
+            var fullPath = Path.Combine(TempPath, relativePath);
+            Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
+            File.WriteAllText(fullPath, "<html></html>");
         }
 
         public void Dispose()
