@@ -231,12 +231,12 @@ The repository's `templates/` folder contains additional example templates (like
 
 ## Custom Templates
 
-Any `.html` file (or a folder with a `template.html` file in it) can be used as a template. If you omit `--template`, ImgForge looks for a default template relative to the current directory, following the [`.tools/` directory spec](https://github.com/tools-dir/spec):
+Any `.html` file (or a folder with a `template.html` file in it) can be used as a template. If you omit `--template`, ImgForge looks for a default template starting in the current directory, following the [`.tools/` directory spec](https://github.com/tools-dir/spec):
 
 1. `.tools/imgforge/template.html` (recommended)
 2. `.imgforge/template.html` (legacy location, still supported)
 
-If both exist, `.tools/imgforge/template.html` takes precedence.
+If neither exists in the current directory and you are inside a git repository, ImgForge checks each parent directory in turn, up to and including the repository root (the nearest directory containing `.git`), so you can run it from any subdirectory. It never searches above the repository root, and outside a repository only the current directory is checked. The nearest match wins; within a single directory, `.tools/imgforge/template.html` takes precedence over `.imgforge/template.html`.
 
 Scriban Liquid syntax is supported for variable injection:
 
