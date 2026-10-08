@@ -308,6 +308,28 @@ dotnet test --filter "Category!=Integration"
 dotnet test
 ```
 
+## Publishing a Release
+
+Releases are published to [NuGet.org](https://www.nuget.org/packages/ImgForge) automatically by the
+[`Publish to NuGet`](.github/workflows/publish.yml) workflow when a GitHub release is published.
+The package version comes from the release tag; the `<Version>` in `src/ImgForge/ImgForge.csproj` is a
+`0.0.0-local` placeholder for local builds and does not need to be bumped.
+
+1. Make sure `main` contains everything for the release and passes `dotnet BuildTestFormat.cs` (build, tests, and format check).
+2. Create a GitHub release with a new tag in the form `vX.Y.Z` (or `vX.Y.Z-suffix` for a prerelease, e.g. `v1.0.0-beta.1`),
+   targeting `main`. The version must be higher than the latest one on NuGet.org. Write the release notes on the release —
+   the NuGet package's release notes link to it.
+
+   ```bash
+   gh release create v0.1.7 --target main --generate-notes
+   ```
+
+3. Publishing the release triggers the workflow, which validates the tag, builds and tests with that version,
+   packs, and pushes to NuGet.org. Tags that aren't valid SemVer (e.g. `v0.1.5a`, `v1.2`) fail before anything is pushed.
+
+Running the workflow manually (**Actions → Publish to NuGet → Run workflow**) performs a dry run: it builds, tests, and
+packs a `0.0.0-ci.N` package but never pushes it.
+
 ## Install as a Global Tool
 
 ```bash
