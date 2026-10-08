@@ -1,5 +1,7 @@
 name: Publish to NuGet
 
+# The package version comes from the release tag (vX.Y.Z or vX.Y.Z-suffix), not the .csproj.
+# Manual runs build, test, and pack a throwaway 0.0.0-ci.N version but never push.
 on:
   workflow_dispatch:
   release:
@@ -7,7 +9,6 @@ on:
 
 env:
   PROJECT_FILE: src/ImgForge/ImgForge.csproj
-  TEST_PROJECT: tests/ImgForge.Tests/ImgForge.Tests.csproj
   PACK_OUTPUT: artifacts/package/release
 
 jobs:
@@ -25,20 +26,44 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
+      - name: Determine version from tag
+        id: version
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          TAG_NAME: ${{ github.event.release.tag_name }}
+          RUN_NUMBER: ${{ github.run_number }}
+        run: |
+          if [ "$EVENT_NAME" = "release" ]; then
+            TAG="$TAG_NAME"
+          else
+            TAG="v0.0.0-ci.$RUN_NUMBER"
+          fi
+          VERSION="${TAG#v}"
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::Tag '$TAG' is not a valid SemVer version (expected vX.Y.Z or vX.Y.Z-suffix)."
+            exit 1
+          fi
+          echo "Publishing version $VERSION"
+          echo "value=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "release-notes=https://github.com/${{ github.repository }}/releases/tag/$TAG" >> "$GITHUB_OUTPUT"
+
       - name: Restore dependencies
         run: dotnet restore
 
+      # Version is passed to build (not just pack) so the assemblies inside the package match it.
       - name: Build
-        run: dotnet build "${{ env.PROJECT_FILE }}" --configuration Release --no-restore
-
-      - name: Build tests
-        run: dotnet build "${{ env.TEST_PROJECT }}" --configuration Release
+        run: dotnet build --configuration Release --no-restore -p:Version=${{ steps.version.outputs.value }}
 
       - name: Test
-        run: dotnet test "${{ env.TEST_PROJECT }}" --configuration Release --no-restore
+        run: dotnet test --configuration Release --no-build
 
       - name: Pack
-        run: dotnet pack "${{ env.PROJECT_FILE }}" --configuration Release --no-build --no-restore --output "${{ env.PACK_OUTPUT }}"
+        run: >
+          dotnet pack "${{ env.PROJECT_FILE }}" --configuration Release --no-build
+          --output "${{ env.PACK_OUTPUT }}"
+          -p:Version=${{ steps.version.outputs.value }}
+          "-p:PackageReleaseNotes=${{ steps.version.outputs.release-notes }}"
 
       - name: NuGet login (OIDC -> temp API key)
         uses: NuGet/login@v1
