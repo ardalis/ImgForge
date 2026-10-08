@@ -1,5 +1,4 @@
 using ImgForge.Core;
-using SixLabors.ImageSharp;
 
 namespace ImgForge.Tests;
 
@@ -64,9 +63,9 @@ public class ImageGeneratorTests : IDisposable
 
         await generator.GenerateAsync(opts);
 
-        using var image = await Image.LoadAsync(outPath);
-        Assert.Equal(1200, image.Width);
-        Assert.Equal(630, image.Height);
+        var (width, height) = PngHeader.ReadDimensions(outPath);
+        Assert.Equal(1200, width);
+        Assert.Equal(630, height);
     }
 
     public void Dispose()

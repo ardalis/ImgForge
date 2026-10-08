@@ -76,7 +76,6 @@ ImageGenerator    (PuppeteerSharp: loads HTML in headless Chromium, screenshots 
 | [Scriban](https://github.com/scriban/scriban) | Liquid-syntax template engine — substitutes `{{ title }}`, `{{ bg }}`, `{{ width }}`, `{{ height }}`, and `{% for img in overlays %}` in HTML templates |
 | [PuppeteerSharp](https://github.com/hardkoded/puppeteer-sharp) | Headless Chromium driver — renders the HTML with full CSS support and captures a pixel-perfect screenshot. Chromium is downloaded automatically on first run. |
 | [System.CommandLine](https://github.com/dotnet/command-line-api) | Parses CLI arguments and subcommands |
-| [SixLabors.ImageSharp](https://github.com/SixLabors/ImageSharp) | Used in tests to verify output PNG dimensions |
 | [xunit](https://xunit.net/) | Test framework |
 
 ## Usage

@@ -63,7 +63,13 @@ No high/medium findings. Low-severity suggestions:
 
 ## Verification notes
 
-`main` currently fails restore because NuGet audit flags `SixLabors.ImageSharp` 3.1.12 (test-only dependency;
-fix is 4.1.2, a major-version bump — left for a separate change). Verification was run with `-p:NuGetAudit=false`.
-`dotnet format --verify-no-changes` reports pre-existing CRLF/alignment violations in files this change doesn't
-touch; changed C# files introduce no new violations.
+NuGet audit (warnings as errors) was failing restore on `main`:
+
+- `SixLabors.ImageSharp` 3.1.12 (test-only, used to read PNG dimensions). Patched 4.x and the 3.x line are under the
+  Six Labors Split License (paid commercial license for some users); Apache-licensed 2.x is also vulnerable. Per the
+  maintainer's request to avoid a paid-license dependency, ImageSharp was removed and replaced by a small
+  PNG IHDR reader in the test project (`tests/ImgForge.Tests/PngHeader.cs`).
+- `Scriban` 7.1.0 — bumped to 7.5.0 (BSD-2-Clause, same major version).
+
+After these changes `dotnet build` and `dotnet test` pass with NuGet audit enabled. `dotnet format --verify-no-changes`
+reports pre-existing CRLF/alignment violations in untouched code (CI does not run format); changed code adds none.
