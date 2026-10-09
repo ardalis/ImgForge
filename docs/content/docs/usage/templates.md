@@ -9,13 +9,13 @@ ImgForge supports both built-in templates and custom HTML templates.
 
 ImgForge includes **3 embedded templates** that are always available when you install the tool:
 
-| Template Name | Default Dimensions | Description | Usage |
+| Template Name | Designed For | Description | Usage |
 |---|---|---|---|
 | `blog` | 1200×630 | Open Graph / social preview card with centered title | `--template blog` |
 | `youtube` | 1280×720 | YouTube thumbnail with bold title styling | `--template youtube` |
 | `blog-subtitle` | 1200×630 | Open Graph card with faded background, optional subtitle, and headshot support | `--template blog-subtitle` |
 
-These templates are embedded in the tool's DLL and work immediately after installation—no need to download template files.
+These templates are embedded in the tool's DLL and work immediately after installation—no need to download template files. Templates don't set the output size, so pass the matching `--format` (or `--width`/`--height`).
 
 ### Example Usage
 
@@ -102,11 +102,11 @@ Templates use [Scriban](https://github.com/scriban/scriban) Liquid syntax for va
 |---|---|---|
 | `title` | `string` | Main heading text |
 | `subtitle` | `string` | Optional subtitle text — empty string when `--subtitle` is not supplied; guard with `{% if subtitle %}` in templates |
-| `bg` | `string` | Background image URI — local `file:///` paths, HTTP(S) URLs, and random picsum URLs are all resolved before injection |
+| `bg` | `string` | Background image URI — local paths become `file:///` URIs, HTTP(S) URLs are passed through, and `random` becomes `https://picsum.photos/{width}/{height}`. Empty string when `--bg` is not supplied |
 | `width` | `int` | Viewport width in pixels |
 | `height` | `int` | Viewport height in pixels |
-| `overlays` | array | List of `{ src, style }` overlay image objects |
-| `headshot` | object or `null` | Guest headshot — exposes `headshot.src` (file URI) and `headshot.filter_css` (CSS filter string). `null` when `--headshot` is not supplied |
+| `overlays` | array | List of `{ src, style }` overlay image objects, one per `--overlay`. `src` is the command-line value, unchanged; `style` is always empty from the CLI |
+| `headshot` | object or `null` | Guest headshot — exposes `headshot.src` (`file:///` URI for local paths; URLs are passed through) and `headshot.filter_css` (CSS filter string). `null` when `--headshot` is not supplied |
 | `vars` | object | Arbitrary key/value pairs supplied via `--var key=value`. Access as `{{ vars.key }}` |
 
 ### Using Variables in Templates

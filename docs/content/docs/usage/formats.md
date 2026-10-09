@@ -82,11 +82,11 @@ imgforge generate --template blog --title "My Post" \
 
 ## Interactive Mode
 
-If you omit both `--format` and explicit dimensions, ImgForge prompts you interactively:
+If you omit both `--format` and explicit dimensions, ImgForge prompts you to pick one of the presets above:
 
 ```bash
 imgforge generate --template blog --title "My Post" --out out.png
-# Prompts for width and height
+# Prompts you to choose a destination format from a numbered list
 ```
 
 ## Quick Reference Commands

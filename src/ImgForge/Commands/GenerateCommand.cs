@@ -20,7 +20,7 @@ public static class GenerateCommand
     {
         var templateOpt = new Option<string?>(
             name: "--template",
-            description: "Built-in template name (blog, youtube) or path to a .html file. " +
+            description: "Built-in template name (blog, youtube, blog-subtitle), path to a .html file, or a directory containing template.html. " +
                          "If omitted, defaults to .tools/imgforge/template.html (or legacy .imgforge/template.html) in the current directory " +
                          "or the nearest parent directory up to the repository root.");
 
@@ -35,7 +35,7 @@ public static class GenerateCommand
 
         var bgOpt = new Option<string?>(
             name: "--bg",
-            description: "Background image: local file path or HTTP(S) URL. Optional.");
+            description: "Background image: local file path, HTTP(S) URL, or \"random\" (random image from picsum.photos). Optional.");
 
         var overlayOpt = new Option<string[]>(
             name: "--overlay",
@@ -65,7 +65,7 @@ public static class GenerateCommand
         var formatOpt = new Option<string?>(
             name: "--format",
             description: "Output format preset that sets width and height. " +
-                         "Choices: youtube (1280×720), blog (1200×630), github (1280×640), " +
+                         "Choices: youtube (1280×720), blog or og (1200×630), github (1280×640), " +
                          "podcast-show (3000×3000), podcast-episode (3000×3000). " +
                          "Explicit --width/--height override the preset.");
 
