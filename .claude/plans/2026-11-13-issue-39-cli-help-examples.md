@@ -35,7 +35,7 @@ Issue: https://github.com/ardalis/ImgForge/issues/39
 
 - [x] `generate --help` output contains `Examples:` and every example
 - [x] Every `generate` option has a non-empty description and its alias appears in help output
-- [x] Every example parses with no errors and every option in `GenerateCommand` is used by at least one example
+- [x] Every example parses with no errors, uses a valid format/background/built-in template, and every option in `GenerateCommand` is used by at least one example
 - [x] Root `--help` contains Examples and mentions `generate --help`
 
 ## Phase 3 — Docs
@@ -44,9 +44,22 @@ Issue: https://github.com/ardalis/ImgForge/issues/39
 
 ## Phase 4 — Independent review
 
-- [ ] Separate agent reviews full diff (correctness, coverage, security, performance, accessibility)
-- [ ] Address significant findings (or record reasons here)
+- [x] Separate agent reviews full diff (correctness, coverage, security, performance, accessibility).
+      Confirmed parse errors, exit codes, `--version`, and Ctrl+C behave the same as before the CommandLineBuilder switch.
+- [x] Address significant findings:
+  - Fixed: `--width`/`--height` showed a misleading `[default: 1200]`/`[default: 630]`. They're now `int?` with no
+    default (a value means "explicit"), the fallback sizes are constants, and the text says the fallback applies only
+    without `--format`.
+  - Fixed: tests now also check example *values* (format preset, `--bg random:<provider>`, built-in template name)
+    and the parser switch (missing `--title` -> exit 1 with error, `--version` -> exit 0).
+  - Fixed: `--overlay` help says what relative paths resolve against.
+  - Fixed: root example uses `"My Post Title"` (`!` triggers history expansion in bash).
+  - Fixed: replaced the loremflickr example (that service is flagged as unreliable) with `random:picsum`.
+  - Not changed: the blank line before root Examples depends on the default Commands section not ending with one;
+    the root help test pins this, so a System.CommandLine upgrade that changes it fails the test.
+  - Not applicable: "PR includes 10 commits" came from a stale local `main`; against `origin/main` it's one commit.
+  - Not changed: shortening the long `--bg` description is out of scope.
 
 ## Phase 5 — Verification
 
-- [ ] `dotnet BuildTestFormat.cs` clean
+- [x] `dotnet BuildTestFormat.cs` clean

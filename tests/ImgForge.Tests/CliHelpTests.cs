@@ -2,6 +2,7 @@ using System.CommandLine;
 using System.CommandLine.IO;
 using System.CommandLine.Parsing;
 using ImgForge.Commands;
+using ImgForge.Core;
 
 namespace ImgForge.Tests;
 
@@ -47,6 +48,21 @@ public class CliHelpTests
         Assert.Equal("generate", result.CommandResult.Command.Name);
     }
 
+    [Theory]
+    [MemberData(nameof(GenerateExampleArguments))]
+    public void GenerateExample_UsesValidFormatBackgroundAndBuiltInTemplate(string arguments)
+    {
+        var generate = Cli.BuildParser().Parse(arguments).CommandResult;
+        string? Value(string name) =>
+            generate.Children.OfType<OptionResult>().SingleOrDefault(o => o.Option.Name == name)?.Tokens.SingleOrDefault()?.Value;
+
+        // Each throws on an unknown format, a bad random:<provider>, or a built-in template name that doesn't exist.
+        _ = GenerateCommand.ResolvePresetDimensions(Value("format"));
+        GenerateCommand.ValidateBackground(Value("bg"));
+        if (Value("template") is { } template && template.IndexOfAny(['/', '\\']) < 0)
+            TemplateRenderer.EnsureTemplateExists(template);
+    }
+
     [Fact]
     public void GenerateExamples_UseEveryOption()
     {
@@ -79,6 +95,28 @@ public class CliHelpTests
     {
         foreach (var example in Cli.RootExamples)
             Assert.Empty(Cli.BuildParser().Parse(example.Arguments).Errors);
+    }
+
+    [Fact]
+    public async Task Invoke_MissingRequiredTitle_FailsWithParseError()
+    {
+        var console = new TestConsole();
+
+        var exitCode = await Cli.BuildParser().InvokeAsync(["generate", "--format", "blog"], console);
+
+        Assert.Equal(1, exitCode);
+        Assert.Contains("Option '--title' is required.", console.Error.ToString());
+    }
+
+    [Fact]
+    public async Task Invoke_Version_Succeeds()
+    {
+        var console = new TestConsole();
+
+        var exitCode = await Cli.BuildParser().InvokeAsync(["--version"], console);
+
+        Assert.Equal(0, exitCode);
+        Assert.False(string.IsNullOrWhiteSpace(console.Out.ToString()));
     }
 
     private static async Task<string> HelpAsync(params string[] args)

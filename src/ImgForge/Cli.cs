@@ -15,7 +15,7 @@ internal static class Cli
     internal static readonly IReadOnlyList<HelpExample> RootExamples =
     [
         new("Blog / Open Graph card with a random background",
-            "generate --template blog --title \"Hello!\" --bg random --format blog"),
+            "generate --template blog --title \"My Post Title\" --bg random --format blog"),
         new("Show every generate option and more examples", "generate --help"),
     ];
 
