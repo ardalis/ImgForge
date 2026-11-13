@@ -56,14 +56,38 @@ default order (Unsplash → Picsum → placehold.co).
 
 ## Phase 4 — Independent review
 
-- [ ] Separate agent (fresh context) reviews the full diff vs. #30: correctness, missed requirements, test gaps,
+- [x] Separate agent (fresh context) reviews the full diff vs. #30: correctness, missed requirements, test gaps,
       regressions, security (key leakage), performance, accessibility
-- [ ] Address all significant findings; record skipped ones below
+- [x] Address all significant findings; record skipped ones below
 
 ## Phase 5 — Final verification
 
-- [ ] `dotnet BuildTestFormat.cs` passes
+- [x] `dotnet BuildTestFormat.cs` passes (302 tests)
 
 ## Review notes
 
-_(pending)_
+A separate general-purpose agent with fresh context reviewed this branch's commit against #30. It found no
+high-severity issues and could not find any way for the key to leak: it is sent only to `api.unsplash.com`, the
+image request carries no `Authorization` header, .NET drops `Authorization` on redirects, and the key never appears
+in messages or `ToString`. All of its findings were addressed:
+
+1. **(Medium) A good image could be thrown away.** If the resolver's 30-second per-provider budget ran out during the
+   best-effort `download_location` call, the cancellation escaped, so a downloaded image was discarded and a request
+   from the hourly quota was wasted. Any cancellation during that call is now ignored and the image is returned (a
+   real Ctrl+C still stops the run when the resolver saves the file). There are now tests for this and for a
+   `download_location` that never responds.
+2. **(Low–medium) An invalid surrogate in the JSON crashed the run.** `GetString()` throws
+   `InvalidOperationException` for such a string, and nothing caught it. It is now caught and treated as an
+   "unexpected response", with a test.
+3. **(Low) Attribution text.** Unicode format, line-separator and paragraph-separator characters (such as the
+   right-to-left override) are now removed as well as control characters. The name is cleaned before the empty
+   check. The photographer's profile link is only shown when it is on `unsplash.com`. All three are tested.
+4. **(Low) Missing test** that `download_location` is not triggered when the image download fails. Added.
+5. **(Low) The 403 message only guessed at a rate limit.** When `X-Ratelimit-Remaining: 0` is present, a 403 or 429
+   now says plainly that the hourly limit was reached. Otherwise a 403 says access was denied and a 429 says "too
+   many requests".
+6. **(Low) `--bg` help text** described the default order before mentioning Unsplash. Unsplash is now part of the
+   default-order sentence.
+
+The reviewer also noted that local `main` was out of date, so it reviewed `HEAD~1..HEAD`. This had no effect on the
+findings.

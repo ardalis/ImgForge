@@ -37,8 +37,8 @@ public static class GenerateCommand
         var bgOpt = new Option<string?>(
             name: "--bg",
             description: "Background image: local file path, HTTP(S) URL, or \"random\". " +
-                         "\"random\" downloads a random image from picsum.photos before rendering, or a solid-color placeholder from placehold.co if picsum.photos fails. " +
-                         "If the UNSPLASH_ACCESS_KEY environment variable is set, Unsplash is tried first. " +
+                         "\"random\" downloads a random image before rendering, trying Unsplash (only if the UNSPLASH_ACCESS_KEY environment variable is set), " +
+                         "then picsum.photos, then a solid-color placeholder from placehold.co. " +
                          "\"random:<provider>\" uses only that provider (no fallback): picsum, loremflickr (optionally random:loremflickr:<keyword>, e.g. random:loremflickr:technology; " +
                          "loremflickr.com has been unreliable, so it isn't in the default order), " +
                          "placeholder (optionally random:placeholder:<hex color>, e.g. random:placeholder:0f172a), " +

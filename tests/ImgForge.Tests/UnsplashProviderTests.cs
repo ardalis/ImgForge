@@ -103,7 +103,7 @@ public class UnsplashProviderTests : IDisposable
         "the access key in UNSPLASH_ACCESS_KEY was rejected (HTTP 401); check that it is a valid Unsplash access key")]
     [InlineData(HttpStatusCode.Forbidden,
         "access was denied (HTTP 403); the hourly rate limit may have been reached, so try again later")]
-    [InlineData(HttpStatusCode.TooManyRequests, "the hourly rate limit was reached (HTTP 429); try again later")]
+    [InlineData(HttpStatusCode.TooManyRequests, "too many requests (HTTP 429); try again later")]
     [InlineData(HttpStatusCode.InternalServerError, "the site returned HTTP 500")]
     public async Task FetchAsync_ApiError_ThrowsClearMessageWithoutKey(HttpStatusCode status, string expected)
     {
@@ -126,6 +126,7 @@ public class UnsplashProviderTests : IDisposable
     [InlineData("""{"urls":{"raw":"http://images.unsplash.com/photo-1"}}""")]
     [InlineData("""{"urls":{"raw":"https://evil.example/photo-1"}}""")]
     [InlineData("""{"urls":{"raw":"/relative/photo-1"}}""")]
+    [InlineData("""{"urls":{"raw":"https://images.unsplash.com/photo-1"},"user":{"name":"a\uD800b"}}""")]
     public async Task FetchAsync_UnexpectedApiResponse_Throws(string json)
     {
         var handler = Unsplash(() => Json(json));
@@ -137,6 +138,85 @@ public class UnsplashProviderTests : IDisposable
         Assert.Equal("the site returned an unexpected response", ex.Message);
         Assert.Single(handler.Requests);
     }
+
+    [Theory]
+    [InlineData(HttpStatusCode.Forbidden)]
+    [InlineData(HttpStatusCode.TooManyRequests)]
+    public async Task FetchAsync_RateLimitRemainingZero_SaysTheHourlyLimitWasReached(HttpStatusCode status)
+    {
+        var handler = Unsplash(() =>
+        {
+            var response = Json("Rate Limit Exceeded", status);
+            response.Headers.Add("X-Ratelimit-Remaining", "0");
+            return response;
+        });
+        var provider = new UnsplashProvider(new HttpClient(handler), Key);
+
+        var ex = await Assert.ThrowsAsync<RandomBackgroundProviderException>(
+            () => provider.FetchAsync(1280, 720, CancellationToken.None));
+
+        Assert.Equal($"the hourly rate limit was reached (HTTP {(int)status}); try again later", ex.Message);
+    }
+
+    [Fact]
+    public async Task FetchAsync_ImageDownloadFails_DoesNotTriggerDownloadLocation()
+    {
+        var handler = new FakeHttpMessageHandler((request, _) => Task.FromResult(
+            request.RequestUri!.Host == "images.unsplash.com" ? new HttpResponseMessage(HttpStatusCode.NotFound)
+            : IsDownloadLocation(request) ? new HttpResponseMessage(HttpStatusCode.OK)
+            : Json(PhotoJson)));
+        var provider = new UnsplashProvider(new HttpClient(handler), Key);
+
+        var ex = await Assert.ThrowsAsync<RandomBackgroundProviderException>(
+            () => provider.FetchAsync(1280, 720, CancellationToken.None));
+
+        Assert.Equal("the site returned HTTP 404", ex.Message);
+        Assert.Equal(2, handler.Requests.Count);
+        Assert.DoesNotContain(handler.Requests, IsDownloadLocation);
+    }
+
+    [Fact]
+    public async Task FetchAsync_CallerTokenCancelledDuringDownloadLocation_StillReturnsImage()
+    {
+        using var cts = new CancellationTokenSource();
+        var handler = new FakeHttpMessageHandler(async (request, ct) =>
+        {
+            if (request.RequestUri!.Host == "images.unsplash.com")
+                return FakeHttpMessageHandler.Image(JpegBytes);
+            if (!IsDownloadLocation(request))
+                return Json(PhotoJson);
+            await cts.CancelAsync(); // e.g. the resolver's per-provider budget runs out now.
+            await Task.Delay(Timeout.Infinite, ct);
+            throw new InvalidOperationException();
+        });
+        var provider = new UnsplashProvider(new HttpClient(handler), Key);
+
+        var image = await provider.FetchAsync(1280, 720, cts.Token);
+
+        Assert.Equal(JpegBytes, image.Content);
+    }
+
+    [Fact]
+    public async Task FetchAsync_DownloadLocationDoesNotRespond_ReturnsImageAfterResponseTimeout()
+    {
+        var handler = new FakeHttpMessageHandler(async (request, ct) =>
+        {
+            if (request.RequestUri!.Host == "images.unsplash.com")
+                return FakeHttpMessageHandler.Image(JpegBytes);
+            if (!IsDownloadLocation(request))
+                return Json(PhotoJson);
+            await Task.Delay(Timeout.Infinite, ct);
+            throw new InvalidOperationException();
+        });
+        var provider = new UnsplashProvider(new HttpClient(handler), Key) { ResponseTimeout = TimeSpan.FromMilliseconds(100) };
+
+        var image = await provider.FetchAsync(1280, 720, CancellationToken.None);
+
+        Assert.Equal(JpegBytes, image.Content);
+    }
+
+    private static bool IsDownloadLocation(HttpRequestMessage request) =>
+        request.RequestUri!.AbsolutePath.EndsWith("/download", StringComparison.Ordinal);
 
     [Fact]
     public async Task FetchAsync_OversizedApiResponse_Throws()
@@ -205,10 +285,31 @@ public class UnsplashProviderTests : IDisposable
         Assert.Equal("Photo from Unsplash (https://unsplash.com/?utm_source=imgforge&utm_medium=referral)", photo.Attribution);
     }
 
+    [Theory]
+    [InlineData("Jane\u001b[31m\nDoe", "Jane[31mDoe")]
+    [InlineData("Jane\u202eeoD", "JaneeoD")]
+    [InlineData("Jane\u2028Doe\u200b", "JaneDoe")]
+    [InlineData("  Jane Doe  ", "Jane Doe")]
+    public void BuildAttribution_StripsUnprintableCharactersFromName(string name, string expected) =>
+        Assert.Equal($"Photo by {expected} on Unsplash (https://unsplash.com/?utm_source=imgforge&utm_medium=referral)",
+            UnsplashProvider.BuildAttribution(name, null));
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("\u001b\n\u202e ")]
+    public void BuildAttribution_NoPrintableName_UsesGenericLine(string? name) =>
+        Assert.Equal("Photo from Unsplash (https://unsplash.com/?utm_source=imgforge&utm_medium=referral)",
+            UnsplashProvider.BuildAttribution(name, new Uri("https://unsplash.com/@x")));
+
     [Fact]
-    public void BuildAttribution_StripsControlCharactersFromName() =>
-        Assert.Equal("Photo by Jane[31mDoe on Unsplash (https://unsplash.com/?utm_source=imgforge&utm_medium=referral)",
-            UnsplashProvider.BuildAttribution("Jane\u001b[31m\nDoe", null));
+    public void ParsePhoto_ProfileOnOtherHost_IsLeftOut()
+    {
+        var photo = UnsplashProvider.ParsePhoto(Encoding.UTF8.GetBytes(
+            """{"urls":{"raw":"https://images.unsplash.com/photo-1"},"user":{"name":"Jane","links":{"html":"https://evil.example/jane"}}}"""));
+
+        Assert.Equal("Photo by Jane on Unsplash (https://unsplash.com/?utm_source=imgforge&utm_medium=referral)", photo.Attribution);
+    }
 
     [Theory]
     [InlineData("")]

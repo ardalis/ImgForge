@@ -29,6 +29,7 @@ internal sealed class UnsplashProvider : IRandomBackgroundProvider
 
     private const string ApiHost = "api.unsplash.com";
     private const string ImageHost = "images.unsplash.com";
+    private const string WebHost = "unsplash.com";
     private const string ReferralQuery = "utm_source=imgforge&utm_medium=referral";
 
     private readonly HttpClient _httpClient;
@@ -97,7 +98,8 @@ internal sealed class UnsplashProvider : IRandomBackgroundProvider
         using (response)
         {
             if (!response.IsSuccessStatusCode)
-                throw new RandomBackgroundProviderException(DescribeFailure(response.StatusCode));
+                throw new RandomBackgroundProviderException(
+                    DescribeFailure(response.StatusCode, IsRateLimitExhausted(response)));
 
             var json = await ReadJsonAsync(response.Content, cancellationToken);
             return ParsePhoto(json);
@@ -114,14 +116,24 @@ internal sealed class UnsplashProvider : IRandomBackgroundProvider
         return request;
     }
 
-    internal static string DescribeFailure(HttpStatusCode status) => status switch
+    /// <summary>True when Unsplash says no requests are left this hour (<c>X-Ratelimit-Remaining: 0</c>).</summary>
+    private static bool IsRateLimitExhausted(HttpResponseMessage response) =>
+        response.Headers.TryGetValues("X-Ratelimit-Remaining", out var values) &&
+        values.FirstOrDefault()?.Trim() == "0";
+
+    /// <summary>A user-facing reason for a failed API call. Never includes the key or the response body.</summary>
+    /// <param name="status">The response status.</param>
+    /// <param name="rateLimitExhausted">Unsplash reported that no requests are left this hour.</param>
+    internal static string DescribeFailure(HttpStatusCode status, bool rateLimitExhausted = false) => status switch
     {
         HttpStatusCode.Unauthorized =>
             $"the access key in {AccessKeyVariable} was rejected (HTTP 401); check that it is a valid Unsplash access key",
+        HttpStatusCode.Forbidden or HttpStatusCode.TooManyRequests when rateLimitExhausted =>
+            $"the hourly rate limit was reached (HTTP {(int)status}); try again later",
+        HttpStatusCode.TooManyRequests =>
+            "too many requests (HTTP 429); try again later",
         HttpStatusCode.Forbidden =>
             "access was denied (HTTP 403); the hourly rate limit may have been reached, so try again later",
-        HttpStatusCode.TooManyRequests =>
-            "the hourly rate limit was reached (HTTP 429); try again later",
         _ => $"the site returned HTTP {(int)status}"
     };
 
@@ -169,12 +181,15 @@ internal sealed class UnsplashProvider : IRandomBackgroundProvider
             if (downloadLocation is not null && !downloadLocation.Host.Equals(ApiHost, StringComparison.OrdinalIgnoreCase))
                 downloadLocation = null; // Never send the access key anywhere but api.unsplash.com.
 
-            var name = GetString(root, "user", "name")?.Trim();
+            var name = GetString(root, "user", "name");
             var profile = AbsoluteHttpsUrl(GetString(root, "user", "links", "html"));
+            if (profile is not null && !profile.Host.Equals(WebHost, StringComparison.OrdinalIgnoreCase))
+                profile = null; // Only link to the photographer's page on unsplash.com.
             return new UnsplashPhoto(rawUrl, downloadLocation, BuildAttribution(name, profile));
         }
-        catch (JsonException)
+        catch (Exception ex) when (ex is JsonException or InvalidOperationException)
         {
+            // InvalidOperationException: e.g. GetString() on a string with an invalid surrogate escape.
             throw new RandomBackgroundProviderException(UnexpectedResponse);
         }
     }
@@ -182,12 +197,14 @@ internal sealed class UnsplashProvider : IRandomBackgroundProvider
     /// <summary>The Unsplash-style credit line, e.g. "Photo by Jane Doe (https://unsplash.com/@jane?...) on Unsplash (...)".</summary>
     internal static string BuildAttribution(string? photographerName, Uri? profileUrl)
     {
-        var unsplash = $"https://unsplash.com/?{ReferralQuery}";
-        if (string.IsNullOrEmpty(photographerName))
+        var unsplash = $"https://{WebHost}/?{ReferralQuery}";
+
+        // The name comes from the API; drop control, format (e.g. right-to-left override), and line/paragraph
+        // separator characters so it can't mess up or spoof the terminal line.
+        var name = new string((photographerName ?? "").Where(IsPrintable).ToArray()).Trim();
+        if (name.Length == 0)
             return $"Photo from Unsplash ({unsplash})";
 
-        // The name comes from the API; drop control characters so it can't mess up the terminal.
-        var name = new string(photographerName.Where(c => !char.IsControl(c)).ToArray());
         var who = profileUrl is null ? name : $"{name} ({WithReferral(profileUrl)})";
         return $"Photo by {who} on Unsplash ({unsplash})";
     }
@@ -201,8 +218,10 @@ internal sealed class UnsplashProvider : IRandomBackgroundProvider
     }
 
     /// <summary>
-    /// Tells Unsplash the photo was used, as its API guidelines require. Best effort: a failure here doesn't fail the
-    /// image, which has already been downloaded.
+    /// Tells Unsplash the photo was used, as its API guidelines require. Best effort: a failure or timeout here doesn't
+    /// fail the image, which has already been downloaded. That includes the caller's token being cancelled (e.g. the
+    /// resolver's per-provider budget running out), so a downloaded image isn't thrown away; a real cancellation by the
+    /// user still stops the run when the resolver next uses its token.
     /// </summary>
     private async Task TriggerDownloadAsync(Uri? downloadLocation, CancellationToken cancellationToken)
     {
@@ -216,7 +235,7 @@ internal sealed class UnsplashProvider : IRandomBackgroundProvider
         {
             using var _ = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cts.Token);
         }
-        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException)
         {
             // Ignored: the image is already downloaded.
         }
@@ -225,6 +244,10 @@ internal sealed class UnsplashProvider : IRandomBackgroundProvider
             // Ignored: the image is already downloaded.
         }
     }
+
+    private static bool IsPrintable(char c) => char.GetUnicodeCategory(c) is not (
+        UnicodeCategory.Control or UnicodeCategory.Format or UnicodeCategory.LineSeparator or
+        UnicodeCategory.ParagraphSeparator or UnicodeCategory.Surrogate);
 
     private static Uri WithReferral(Uri url)
     {
