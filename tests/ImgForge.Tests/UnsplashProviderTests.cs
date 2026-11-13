@@ -366,7 +366,7 @@ public class UnsplashProviderTests : IDisposable
     [Fact]
     public void Spec_RandomUnsplashWithKey_CreatesUnsplashProvider()
     {
-        var spec = RandomBackgroundSpec.Parse("random:Unsplash", () => Key);
+        var spec = RandomBackgroundSpec.Parse("random:Unsplash", _ => Key);
 
         Assert.Equal("unsplash", spec.ProviderName);
         Assert.Equal("--bg random:unsplash", spec.OptionText);
@@ -380,7 +380,7 @@ public class UnsplashProviderTests : IDisposable
     [InlineData(" ")]
     public void Spec_RandomUnsplashWithoutKey_ThrowsExplainingTheVariable(string? key)
     {
-        var ex = Assert.Throws<ArgumentException>(() => RandomBackgroundSpec.Parse("random:unsplash", () => key));
+        var ex = Assert.Throws<ArgumentException>(() => RandomBackgroundSpec.Parse("random:unsplash", _ => key));
 
         Assert.Equal(
             "Invalid --bg value \"random:unsplash\": Unsplash needs an access key. Set the UNSPLASH_ACCESS_KEY " +
@@ -391,7 +391,7 @@ public class UnsplashProviderTests : IDisposable
     [Fact]
     public void Spec_RandomUnsplashWithOption_Throws()
     {
-        var ex = Assert.Throws<ArgumentException>(() => RandomBackgroundSpec.Parse("random:unsplash:city", () => Key));
+        var ex = Assert.Throws<ArgumentException>(() => RandomBackgroundSpec.Parse("random:unsplash:city", _ => Key));
 
         Assert.Equal("Invalid --bg value \"random:unsplash:city\": unsplash doesn't take an option. Use \"random:unsplash\".",
             ex.Message);
@@ -399,7 +399,7 @@ public class UnsplashProviderTests : IDisposable
 
     [Fact]
     public void Spec_OtherProvider_DoesNotReadKey() =>
-        RandomBackgroundSpec.Parse("random:picsum", () => throw new InvalidOperationException("key read"));
+        RandomBackgroundSpec.Parse("random:picsum", _ => throw new InvalidOperationException("key read"));
 
     public void Dispose() => Directory.Delete(_tempDir, recursive: true);
 }

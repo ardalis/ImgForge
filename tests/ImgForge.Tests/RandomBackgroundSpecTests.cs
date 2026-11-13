@@ -78,11 +78,11 @@ public class RandomBackgroundSpecTests
     [Fact]
     public void Parse_UnknownProvider_ListsValidProviders()
     {
-        var ex = Assert.Throws<ArgumentException>(() => RandomBackgroundSpec.Parse("random:pexels"));
+        var ex = Assert.Throws<ArgumentException>(() => RandomBackgroundSpec.Parse("random:flickr"));
 
         Assert.Equal(
-            "Invalid --bg value \"random:pexels\": unknown provider \"pexels\". " +
-            "Valid providers: picsum, loremflickr, placeholder, unsplash (for example: --bg random:picsum).",
+            "Invalid --bg value \"random:flickr\": unknown provider \"flickr\". " +
+            "Valid providers: picsum, loremflickr, placeholder, unsplash, pexels, pixabay (for example: --bg random:picsum).",
             ex.Message);
     }
 

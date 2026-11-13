@@ -15,19 +15,28 @@ internal sealed class RandomBackgroundResolver
     private readonly IReadOnlyList<IRandomBackgroundProvider> _providers;
 
     /// <summary>
-    /// Uses the default provider order (see <see cref="DefaultProviders"/>), with Unsplash first when
-    /// <c>UNSPLASH_ACCESS_KEY</c> is set.
+    /// Uses the default provider order (see <see cref="DefaultProviders"/>), starting with each API provider whose key
+    /// is set (<c>UNSPLASH_ACCESS_KEY</c>, <c>PEXELS_API_KEY</c>, <c>PIXABAY_API_KEY</c>).
     /// </summary>
-    public RandomBackgroundResolver() : this(DefaultProviders(UnsplashProvider.AccessKeyFromEnvironment())) { }
+    public RandomBackgroundResolver() : this(DefaultProviders(
+        UnsplashProvider.AccessKeyFromEnvironment(),
+        PexelsProvider.ApiKeyFromEnvironment(),
+        PixabayProvider.ApiKeyFromEnvironment()))
+    { }
 
     /// <summary>
-    /// The default provider order: Unsplash (only when <paramref name="unsplashAccessKey"/> is given), picsum.photos,
-    /// then a solid-color placeholder from placehold.co as the last resort.
+    /// The default provider order: Unsplash, Pexels, and Pixabay (each only when its key is given), picsum.photos, then
+    /// a solid-color placeholder from placehold.co as the last resort.
     /// </summary>
-    internal static IEnumerable<IRandomBackgroundProvider> DefaultProviders(string? unsplashAccessKey)
+    internal static IEnumerable<IRandomBackgroundProvider> DefaultProviders(
+        string? unsplashAccessKey, string? pexelsApiKey = null, string? pixabayApiKey = null)
     {
         if (!string.IsNullOrWhiteSpace(unsplashAccessKey))
             yield return new UnsplashProvider(unsplashAccessKey);
+        if (!string.IsNullOrWhiteSpace(pexelsApiKey))
+            yield return new PexelsProvider(pexelsApiKey);
+        if (!string.IsNullOrWhiteSpace(pixabayApiKey))
+            yield return new PixabayProvider(pixabayApiKey);
         yield return new PicsumProvider();
         yield return new PlaceholderProvider();
     }

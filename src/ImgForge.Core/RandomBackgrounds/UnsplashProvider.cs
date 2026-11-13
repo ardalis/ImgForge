@@ -1,7 +1,6 @@
 using System.Globalization;
 using System.Net;
 using System.Net.Http.Headers;
-using System.Text.Json;
 
 namespace ImgForge.Core.RandomBackgrounds;
 
@@ -25,7 +24,7 @@ internal sealed class UnsplashProvider : IRandomBackgroundProvider
     public const string ProviderName = "unsplash.com";
 
     /// <summary>The largest API (JSON) response accepted.</summary>
-    internal const int MaxJsonBytes = 1024 * 1024;
+    internal const int MaxJsonBytes = ApiProviderHelpers.MaxJsonBytes;
 
     private const string ApiHost = "api.unsplash.com";
     private const string ImageHost = "images.unsplash.com";
@@ -56,10 +55,7 @@ internal sealed class UnsplashProvider : IRandomBackgroundProvider
     /// <summary>
     /// The access key from <see cref="AccessKeyVariable"/>, or <c>null</c> when it isn't set (or is only whitespace).
     /// </summary>
-    public static string? AccessKeyFromEnvironment() =>
-        Environment.GetEnvironmentVariable(AccessKeyVariable) is { } key && !string.IsNullOrWhiteSpace(key)
-            ? key.Trim()
-            : null;
+    public static string? AccessKeyFromEnvironment() => ApiProviderHelpers.KeyFromEnvironment(AccessKeyVariable);
 
     internal static Uri RandomPhotoUrl(int width, int height)
     {
@@ -79,47 +75,23 @@ internal sealed class UnsplashProvider : IRandomBackgroundProvider
     private async Task<UnsplashPhoto> GetRandomPhotoAsync(int width, int height, CancellationToken cancellationToken)
     {
         using var request = CreateApiRequest(RandomPhotoUrl(width, height));
+        using var response = await ApiProviderHelpers.SendAsync(_httpClient, request, ResponseTimeout, cancellationToken);
 
-        HttpResponseMessage response;
-        using (var responseCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))
-        {
-            responseCts.CancelAfter(ResponseTimeout);
-            try
-            {
-                response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, responseCts.Token);
-            }
-            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
-            {
-                throw new RandomBackgroundProviderException(
-                    $"the site did not respond within {HttpImageDownloader.FormatSeconds(ResponseTimeout)}");
-            }
-        }
+        if (!response.IsSuccessStatusCode)
+            throw new RandomBackgroundProviderException(
+                DescribeFailure(response.StatusCode, ApiProviderHelpers.IsRateLimitExhausted(response)));
 
-        using (response)
-        {
-            if (!response.IsSuccessStatusCode)
-                throw new RandomBackgroundProviderException(
-                    DescribeFailure(response.StatusCode, IsRateLimitExhausted(response)));
-
-            var json = await ReadJsonAsync(response.Content, cancellationToken);
-            return ParsePhoto(json);
-        }
+        var json = await ApiProviderHelpers.ReadJsonAsync(response.Content, cancellationToken);
+        return ParsePhoto(json);
     }
 
     private HttpRequestMessage CreateApiRequest(Uri url)
     {
-        var request = new HttpRequestMessage(HttpMethod.Get, url);
+        var request = ApiProviderHelpers.JsonRequest(url);
         request.Headers.Authorization = new AuthenticationHeaderValue("Client-ID", _accessKey);
         request.Headers.Add("Accept-Version", "v1");
-        // Replaces the shared client's default "Accept: image/*" for this request.
-        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
         return request;
     }
-
-    /// <summary>True when Unsplash says no requests are left this hour (<c>X-Ratelimit-Remaining: 0</c>).</summary>
-    private static bool IsRateLimitExhausted(HttpResponseMessage response) =>
-        response.Headers.TryGetValues("X-Ratelimit-Remaining", out var values) &&
-        values.FirstOrDefault()?.Trim() == "0";
 
     /// <summary>A user-facing reason for a failed API call. Never includes the key or the response body.</summary>
     /// <param name="status">The response status.</param>
@@ -137,62 +109,22 @@ internal sealed class UnsplashProvider : IRandomBackgroundProvider
         _ => $"the site returned HTTP {(int)status}"
     };
 
-    private static async Task<byte[]> ReadJsonAsync(HttpContent content, CancellationToken cancellationToken)
-    {
-        if (content.Headers.ContentLength > MaxJsonBytes)
-            throw new RandomBackgroundProviderException(UnexpectedResponse);
-
-        using var buffer = new MemoryStream();
-        try
-        {
-            await using var body = await content.ReadAsStreamAsync(cancellationToken);
-            var chunk = new byte[16384];
-            int read;
-            while ((read = await body.ReadAsync(chunk, cancellationToken)) > 0)
-            {
-                if (buffer.Length + read > MaxJsonBytes)
-                    throw new RandomBackgroundProviderException(UnexpectedResponse);
-                buffer.Write(chunk, 0, read);
-            }
-        }
-        catch (IOException ex)
-        {
-            throw new RandomBackgroundProviderException(
-                $"the connection was lost while reading the response ({ex.GetBaseException().Message.TrimEnd('.', ' ')})");
-        }
-
-        return buffer.ToArray();
-    }
-
     /// <summary>Reads the fields ImgForge needs from a <c>/photos/random</c> response.</summary>
     /// <exception cref="RandomBackgroundProviderException">The JSON is malformed or missing a required field.</exception>
-    internal static UnsplashPhoto ParsePhoto(byte[] json)
+    internal static UnsplashPhoto ParsePhoto(byte[] json) => ApiProviderHelpers.Parse(json, root =>
     {
-        try
-        {
-            using var document = JsonDocument.Parse(json);
-            var root = document.RootElement;
+        var rawUrl = ApiProviderHelpers.HttpsUrlOnHost(ApiProviderHelpers.GetString(root, "urls", "raw"), ImageHost)
+            ?? throw new RandomBackgroundProviderException(ApiProviderHelpers.UnexpectedResponse);
 
-            var rawUrl = AbsoluteHttpsUrl(GetString(root, "urls", "raw"));
-            if (rawUrl is null || !rawUrl.Host.Equals(ImageHost, StringComparison.OrdinalIgnoreCase))
-                throw new RandomBackgroundProviderException(UnexpectedResponse);
+        // Never send the access key anywhere but api.unsplash.com.
+        var downloadLocation = ApiProviderHelpers.HttpsUrlOnHost(
+            ApiProviderHelpers.GetString(root, "links", "download_location"), ApiHost);
 
-            var downloadLocation = AbsoluteHttpsUrl(GetString(root, "links", "download_location"));
-            if (downloadLocation is not null && !downloadLocation.Host.Equals(ApiHost, StringComparison.OrdinalIgnoreCase))
-                downloadLocation = null; // Never send the access key anywhere but api.unsplash.com.
-
-            var name = GetString(root, "user", "name");
-            var profile = AbsoluteHttpsUrl(GetString(root, "user", "links", "html"));
-            if (profile is not null && !profile.Host.Equals(WebHost, StringComparison.OrdinalIgnoreCase))
-                profile = null; // Only link to the photographer's page on unsplash.com.
-            return new UnsplashPhoto(rawUrl, downloadLocation, BuildAttribution(name, profile));
-        }
-        catch (Exception ex) when (ex is JsonException or InvalidOperationException)
-        {
-            // InvalidOperationException: e.g. GetString() on a string with an invalid surrogate escape.
-            throw new RandomBackgroundProviderException(UnexpectedResponse);
-        }
-    }
+        var name = ApiProviderHelpers.GetString(root, "user", "name");
+        // Only link to the photographer's page on unsplash.com.
+        var profile = ApiProviderHelpers.HttpsUrlOnHost(ApiProviderHelpers.GetString(root, "user", "links", "html"), WebHost);
+        return new UnsplashPhoto(rawUrl, downloadLocation, BuildAttribution(name, profile));
+    });
 
     /// <summary>The Unsplash-style credit line, e.g. "Photo by Jane Doe (https://unsplash.com/@jane?...) on Unsplash (...)".</summary>
     internal static string BuildAttribution(string? photographerName, Uri? profileUrl)
@@ -201,7 +133,7 @@ internal sealed class UnsplashProvider : IRandomBackgroundProvider
 
         // The name comes from the API; drop control, format (e.g. right-to-left override), and line/paragraph
         // separator characters so it can't mess up or spoof the terminal line.
-        var name = new string((photographerName ?? "").Where(IsPrintable).ToArray()).Trim();
+        var name = ApiProviderHelpers.CleanName(photographerName);
         if (name.Length == 0)
             return $"Photo from Unsplash ({unsplash})";
 
@@ -213,8 +145,7 @@ internal sealed class UnsplashProvider : IRandomBackgroundProvider
     internal static Uri SizedImageUrl(Uri rawUrl, int width, int height)
     {
         var sizing = string.Create(CultureInfo.InvariantCulture, $"w={width}&h={height}&fit=crop&fm=jpg&q=80");
-        var query = rawUrl.Query.TrimStart('?');
-        return new UriBuilder(rawUrl) { Query = query.Length == 0 ? sizing : $"{query}&{sizing}" }.Uri;
+        return ApiProviderHelpers.AppendQuery(rawUrl, sizing);
     }
 
     /// <summary>
@@ -245,31 +176,7 @@ internal sealed class UnsplashProvider : IRandomBackgroundProvider
         }
     }
 
-    private static bool IsPrintable(char c) => char.GetUnicodeCategory(c) is not (
-        UnicodeCategory.Control or UnicodeCategory.Format or UnicodeCategory.LineSeparator or
-        UnicodeCategory.ParagraphSeparator or UnicodeCategory.Surrogate);
-
-    private static Uri WithReferral(Uri url)
-    {
-        var query = url.Query.TrimStart('?');
-        return new UriBuilder(url) { Query = query.Length == 0 ? ReferralQuery : $"{query}&{ReferralQuery}" }.Uri;
-    }
-
-    private static Uri? AbsoluteHttpsUrl(string? value) =>
-        Uri.TryCreate(value, UriKind.Absolute, out var url) && url.Scheme == Uri.UriSchemeHttps ? url : null;
-
-    private static string? GetString(JsonElement element, params string[] path)
-    {
-        foreach (var name in path)
-        {
-            if (element.ValueKind != JsonValueKind.Object || !element.TryGetProperty(name, out element))
-                return null;
-        }
-
-        return element.ValueKind == JsonValueKind.String ? element.GetString() : null;
-    }
-
-    private const string UnexpectedResponse = "the site returned an unexpected response";
+    private static Uri WithReferral(Uri url) => ApiProviderHelpers.AppendQuery(url, ReferralQuery);
 }
 
 /// <summary>The parts of an Unsplash random-photo response that ImgForge uses.</summary>
