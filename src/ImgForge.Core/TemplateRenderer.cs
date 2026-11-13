@@ -12,11 +12,19 @@ public class TemplateRenderer
             ["none"] = "none"
         };
 
+    /// <summary>The URL used for <c>--bg random</c>: a random picsum.photos image at the output size.</summary>
+    internal static string RandomBackgroundUrl(int width, int height) =>
+        $"https://picsum.photos/{width}/{height}";
+
+    /// <summary>True when the background option asks for a random picsum.photos image (<c>--bg random</c>).</summary>
+    internal static bool IsRandomBackground(string? background) =>
+        string.Equals(background?.Trim(), "random", StringComparison.OrdinalIgnoreCase);
+
     public string Render(GenerateOptions opts)
     {
         var (templateSource, templateDir) = LoadTemplateSource(opts.Template);
-        var bg = opts.Background?.Equals("random", StringComparison.OrdinalIgnoreCase) == true
-            ? $"https://picsum.photos/{opts.Width}/{opts.Height}"
+        var bg = IsRandomBackground(opts.Background)
+            ? RandomBackgroundUrl(opts.Width, opts.Height)
             : ResolveLocalPath(opts.Background);
 
         var template = Template.ParseLiquid(templateSource);

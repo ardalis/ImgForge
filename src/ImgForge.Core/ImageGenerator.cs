@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Globalization;
 using System.Runtime.InteropServices;
 using PuppeteerSharp;
+using PuppeteerSharp.BrowserData;
 
 namespace ImgForge.Core;
 
@@ -11,6 +12,11 @@ public class ImageGenerator(TemplateRenderer renderer)
     /// How long to wait for the rendered template and all of its resources to load.
     /// </summary>
     internal TimeSpan LoadTimeout { get; set; } = TimeSpan.FromSeconds(30);
+
+    /// <summary>
+    /// Where warnings about failed template resources are written (stderr by default).
+    /// </summary>
+    internal TextWriter Warnings { get; set; } = Console.Error;
 
     public async Task<string> GenerateAsync(GenerateOptions opts)
     {
@@ -37,9 +43,26 @@ public class ImageGenerator(TemplateRenderer renderer)
             var fileUri = "file:///" + tempHtml.Replace('\\', '/');
             // Track in-flight requests so a timeout can name the site(s) that never responded.
             var pending = new ConcurrentDictionary<IRequest, byte>();
+            // Track failed requests so a remote image that fails fast (offline, DNS failure, HTTP error)
+            // is reported instead of silently producing an image without it.
+            var failed = new ConcurrentQueue<FailedRequest>();
             page.Request += (_, e) => pending.TryAdd(e.Request, 0);
-            page.RequestFinished += (_, e) => pending.TryRemove(e.Request, out byte _);
-            page.RequestFailed += (_, e) => pending.TryRemove(e.Request, out byte _);
+            page.RequestFinished += (_, e) =>
+            {
+                pending.TryRemove(e.Request, out byte _);
+                var status = (int?)e.Request.Response?.Status;
+                if (status >= 400)
+                    failed.Enqueue(new FailedRequest(OriginalUrl(e.Request), $"HTTP {status}"));
+            };
+            page.RequestFailed += (_, e) =>
+            {
+                pending.TryRemove(e.Request, out byte _);
+                // ERR_ABORTED means the page itself cancelled the request (e.g. an image that was replaced), not a failure.
+                // Note: an HTML/JSON error page returned for an image arrives here as ERR_BLOCKED_BY_ORB (Chromium
+                // blocks it before PuppeteerSharp sees the response), so its HTTP status isn't available.
+                if (!string.Equals(e.Request.FailureText, "net::ERR_ABORTED", StringComparison.Ordinal))
+                    failed.Enqueue(new FailedRequest(OriginalUrl(e.Request), e.Request.FailureText ?? "unknown error"));
+            };
 
             try
             {
@@ -53,6 +76,9 @@ public class ImageGenerator(TemplateRenderer renderer)
             {
                 throw new ImageGenerationTimeoutException(BuildTimeoutMessage(opts, LoadTimeout, GetPendingHosts(pending.Keys)), ex);
             }
+
+            ReportLoadFailures(opts, failed);
+
             await page.ScreenshotAsync(opts.Out, new ScreenshotOptions { FullPage = false });
         }
         finally
@@ -62,6 +88,25 @@ public class ImageGenerator(TemplateRenderer renderer)
 
         return opts.Out;
     }
+
+    /// <summary>
+    /// Throws <see cref="ImageLoadException"/> if a remote image the user asked for failed to load;
+    /// writes a warning for each failed remote resource referenced only by the template.
+    /// </summary>
+    private void ReportLoadFailures(GenerateOptions opts, IEnumerable<FailedRequest> failed)
+    {
+        var failures = ResourceLoadFailures.Classify(opts, failed);
+
+        foreach (var failure in failures.Where(f => !f.IsRequestedByUser))
+            Warnings.WriteLine(ResourceLoadFailures.BuildWarning(failure));
+
+        var requested = failures.Where(f => f.IsRequestedByUser).ToList();
+        if (requested.Count > 0)
+            throw new ImageLoadException(ResourceLoadFailures.BuildErrorMessage(requested));
+    }
+
+    private static string OriginalUrl(IRequest request) =>
+        request.RedirectChain?.FirstOrDefault()?.Url ?? request.Url;
 
     private static bool IsTimeout(NavigationException ex) =>
         ex.InnerException is TimeoutException
@@ -73,7 +118,7 @@ public class ImageGenerator(TemplateRenderer renderer)
     /// </summary>
     private static List<string> GetPendingHosts(IEnumerable<IRequest> requests) =>
         requests
-            .Select(r => r.RedirectChain?.FirstOrDefault()?.Url ?? r.Url)
+            .Select(OriginalUrl)
             .Select(GetHttpHost)
             .OfType<string>()
             .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -99,7 +144,7 @@ public class ImageGenerator(TemplateRenderer renderer)
         var seconds = $"{secondsValue} second{(timeout.TotalSeconds == 1 ? "" : "s")}";
 
         var bg = opts.Background?.Trim();
-        var isRandomBg = string.Equals(bg, "random", StringComparison.OrdinalIgnoreCase);
+        var isRandomBg = TemplateRenderer.IsRandomBackground(bg);
         var bgHost = isRandomBg ? RandomBackgroundHost : GetHttpHost(bg);
 
         IReadOnlyList<string> hosts = pendingHosts is { Count: > 0 }
@@ -148,13 +193,36 @@ public class ImageGenerator(TemplateRenderer renderer)
 
     private const string RandomBackgroundHost = "picsum.photos";
 
+    // Serializes the first-run Chromium download. Concurrent GenerateAsync calls would otherwise all see
+    // "no browser installed" and download to the same zip file at once, failing with an IOException.
+    private static readonly SemaphoreSlim BrowserDownloadLock = new(1, 1);
+    private static volatile bool _browserReady;
+
     private static async Task EnsureBrowserAsync()
     {
-        var fetcher = new BrowserFetcher();
-        if (!fetcher.GetInstalledBrowsers().Any())
+        if (_browserReady) return;
+
+        await BrowserDownloadLock.WaitAsync();
+        try
         {
-            Console.Error.WriteLine("Downloading Chromium (first run only)...");
-            await fetcher.DownloadAsync();
+            if (_browserReady) return;
+
+            // Check for the exact Chrome build Puppeteer.LaunchAsync will start. Another browser (e.g. a
+            // headless shell) or an older build left by a previous PuppeteerSharp version doesn't count.
+            var fetcher = new BrowserFetcher();
+            var installed = fetcher.GetInstalledBrowsers().Any(b =>
+                b.Browser == SupportedBrowser.Chrome && b.BuildId == Chrome.DefaultBuildId);
+            if (!installed)
+            {
+                Console.Error.WriteLine("Downloading Chromium (first run only)...");
+                await fetcher.DownloadAsync();
+            }
+
+            _browserReady = true;
+        }
+        finally
+        {
+            BrowserDownloadLock.Release();
         }
     }
 }
