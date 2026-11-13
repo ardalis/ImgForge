@@ -1,6 +1,4 @@
-using System.CommandLine;
-using ImgForge.Commands;
+using System.CommandLine.Parsing;
+using ImgForge;
 
-var rootCommand = new RootCommand("ImgForge \u2014 generate images from HTML templates");
-rootCommand.AddCommand(GenerateCommand.Build());
-return await rootCommand.InvokeAsync(args);
+return await Cli.BuildParser().InvokeAsync(args);
