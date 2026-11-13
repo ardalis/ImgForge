@@ -15,10 +15,22 @@ internal sealed class RandomBackgroundResolver
     private readonly IReadOnlyList<IRandomBackgroundProvider> _providers;
 
     /// <summary>
-    /// Uses the default provider order: picsum.photos, then a solid-color placeholder from placehold.co as the last
-    /// resort.
+    /// Uses the default provider order (see <see cref="DefaultProviders"/>), with Unsplash first when
+    /// <c>UNSPLASH_ACCESS_KEY</c> is set.
     /// </summary>
-    public RandomBackgroundResolver() : this(new PicsumProvider(), new PlaceholderProvider()) { }
+    public RandomBackgroundResolver() : this(DefaultProviders(UnsplashProvider.AccessKeyFromEnvironment())) { }
+
+    /// <summary>
+    /// The default provider order: Unsplash (only when <paramref name="unsplashAccessKey"/> is given), picsum.photos,
+    /// then a solid-color placeholder from placehold.co as the last resort.
+    /// </summary>
+    internal static IEnumerable<IRandomBackgroundProvider> DefaultProviders(string? unsplashAccessKey)
+    {
+        if (!string.IsNullOrWhiteSpace(unsplashAccessKey))
+            yield return new UnsplashProvider(unsplashAccessKey);
+        yield return new PicsumProvider();
+        yield return new PlaceholderProvider();
+    }
 
     /// <param name="providers">The providers to try, in order. At least one is required.</param>
     public RandomBackgroundResolver(params IEnumerable<IRandomBackgroundProvider> providers)
@@ -68,7 +80,7 @@ internal sealed class RandomBackgroundResolver
             }
 
             var path = await SaveAsync(image, cancellationToken);
-            return new ResolvedRandomBackground(path, provider.Name, failures);
+            return new ResolvedRandomBackground(path, provider.Name, failures) { Attribution = image.Attribution };
         }
 
         throw new ImageLoadException(BuildErrorMessage(failures, BackgroundOption));
@@ -179,7 +191,11 @@ internal sealed class RandomBackgroundResolver
 /// <param name="ProviderName">The provider the image came from.</param>
 /// <param name="Failures">Providers tried before <paramref name="ProviderName"/> that failed, in order.</param>
 internal sealed record ResolvedRandomBackground(
-    string Path, string ProviderName, IReadOnlyList<RandomBackgroundProviderFailure> Failures);
+    string Path, string ProviderName, IReadOnlyList<RandomBackgroundProviderFailure> Failures)
+{
+    /// <summary>A credit line to show the user (e.g. "Photo by ... on Unsplash"), or <c>null</c> when none is needed.</summary>
+    public string? Attribution { get; init; }
+}
 
 /// <summary>Why one provider couldn't supply a random background.</summary>
 /// <param name="ProviderName">The provider's user-facing name.</param>

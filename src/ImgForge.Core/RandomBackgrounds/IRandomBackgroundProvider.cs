@@ -15,7 +15,11 @@ internal interface IRandomBackgroundProvider
 /// <summary>A downloaded random background image.</summary>
 /// <param name="Content">The image bytes.</param>
 /// <param name="MediaType">The response media type, e.g. <c>image/jpeg</c>.</param>
-internal sealed record RandomBackgroundImage(byte[] Content, string MediaType);
+internal sealed record RandomBackgroundImage(byte[] Content, string MediaType)
+{
+    /// <summary>A credit line to show the user (e.g. the photographer), or <c>null</c> when none is needed.</summary>
+    public string? Attribution { get; init; }
+}
 
 /// <summary>
 /// Thrown by a provider that responded but didn't return a usable image. <see cref="Exception.Message"/> is a

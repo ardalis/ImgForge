@@ -15,17 +15,22 @@ internal sealed record RandomBackgroundSpec
     public const string Picsum = "picsum";
     public const string LoremFlickr = "loremflickr";
     public const string Placeholder = "placeholder";
+    public const string Unsplash = "unsplash";
 
     /// <summary>The provider names accepted after <c>random:</c>, in the order shown to users.</summary>
-    public static IReadOnlyList<string> ProviderNames { get; } = [Picsum, LoremFlickr, Placeholder];
+    public static IReadOnlyList<string> ProviderNames { get; } = [Picsum, LoremFlickr, Placeholder, Unsplash];
 
     /// <summary>The default provider order (<c>--bg random</c>).</summary>
     public static RandomBackgroundSpec Default { get; } = new(null, null);
 
-    private RandomBackgroundSpec(string? providerName, string? option)
+    /// <summary>The Unsplash access key, for <c>random:unsplash</c> only. Private so it never appears in <c>ToString</c>.</summary>
+    private readonly string? _unsplashAccessKey;
+
+    private RandomBackgroundSpec(string? providerName, string? option, string? unsplashAccessKey = null)
     {
         ProviderName = providerName;
         Option = option;
+        _unsplashAccessKey = unsplashAccessKey;
     }
 
     /// <summary>The selected provider (one of <see cref="ProviderNames"/>), or <c>null</c> for the default order.</summary>
@@ -57,9 +62,16 @@ internal sealed record RandomBackgroundSpec
 
     /// <summary>Parses a <c>--bg</c> value for which <see cref="IsRandom"/> is true.</summary>
     /// <exception cref="ArgumentException">
-    /// The value isn't a random background, names an unknown provider, or has a missing or invalid option.
+    /// The value isn't a random background, names an unknown provider, has a missing or invalid option, or selects
+    /// Unsplash while <c>UNSPLASH_ACCESS_KEY</c> isn't set.
     /// </exception>
-    public static RandomBackgroundSpec Parse(string background)
+    public static RandomBackgroundSpec Parse(string background) =>
+        Parse(background, UnsplashProvider.AccessKeyFromEnvironment);
+
+    /// <inheritdoc cref="Parse(string)"/>
+    /// <param name="background">The <c>--bg</c> value.</param>
+    /// <param name="unsplashAccessKey">Gets the Unsplash access key (or <c>null</c>); called only for <c>random:unsplash</c>.</param>
+    internal static RandomBackgroundSpec Parse(string background, Func<string?> unsplashAccessKey)
     {
         if (!IsRandom(background))
             throw new ArgumentException($"\"{background}\" is not a random background (expected \"{Keyword}\" or \"{Keyword}:<provider>\").", nameof(background));
@@ -73,6 +85,17 @@ internal sealed record RandomBackgroundSpec
             throw Invalid(background, $"a provider name is missing after \"{Keyword}:\". {ValidProvidersText}");
         if (!ProviderNames.Contains(name))
             throw Invalid(background, $"unknown provider \"{parts[1].Trim()}\". {ValidProvidersText}");
+
+        if (name == Unsplash)
+        {
+            if (parts.Length == 3)
+                throw Invalid(background, $"{name} doesn't take an option. Use \"{Keyword}:{name}\".");
+            var key = unsplashAccessKey();
+            if (string.IsNullOrWhiteSpace(key))
+                throw Invalid(background, $"Unsplash needs an access key. Set the {UnsplashProvider.AccessKeyVariable} " +
+                    "environment variable to your Unsplash access key (free at https://unsplash.com/developers).");
+            return new RandomBackgroundSpec(name, null, key.Trim());
+        }
 
         if (parts.Length == 2)
             return new RandomBackgroundSpec(name, null);
@@ -108,6 +131,7 @@ internal sealed record RandomBackgroundSpec
             Picsum => new PicsumProvider(client),
             LoremFlickr => Option is null ? new LoremFlickrProvider(client) : new LoremFlickrProvider(client) { Keyword = Option },
             Placeholder => Option is null ? new PlaceholderProvider(client) : new PlaceholderProvider(client) { Color = Option },
+            Unsplash => new UnsplashProvider(client, _unsplashAccessKey!),
             _ => throw new InvalidOperationException($"Unhandled provider \"{ProviderName}\".")
         };
     }
