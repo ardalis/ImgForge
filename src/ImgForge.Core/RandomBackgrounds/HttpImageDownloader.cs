@@ -73,15 +73,24 @@ internal static class HttpImageDownloader
             if (response.Content.Headers.ContentLength > MaxImageBytes)
                 throw new RandomBackgroundProviderException(TooLarge);
 
-            await using var body = await response.Content.ReadAsStreamAsync(cancellationToken);
             using var buffer = new MemoryStream();
-            var chunk = new byte[81920];
-            int read;
-            while ((read = await body.ReadAsync(chunk, cancellationToken)) > 0)
+            try
             {
-                if (buffer.Length + read > MaxImageBytes)
-                    throw new RandomBackgroundProviderException(TooLarge);
-                buffer.Write(chunk, 0, read);
+                await using var body = await response.Content.ReadAsStreamAsync(cancellationToken);
+                var chunk = new byte[81920];
+                int read;
+                while ((read = await body.ReadAsync(chunk, cancellationToken)) > 0)
+                {
+                    if (buffer.Length + read > MaxImageBytes)
+                        throw new RandomBackgroundProviderException(TooLarge);
+                    buffer.Write(chunk, 0, read);
+                }
+            }
+            catch (IOException ex)
+            {
+                // e.g. HttpIOException ("response ended prematurely") when the connection drops mid-download.
+                throw new RandomBackgroundProviderException(
+                    $"the connection was lost while downloading the image ({ex.GetBaseException().Message.TrimEnd('.', ' ')})");
             }
 
             if (buffer.Length == 0)

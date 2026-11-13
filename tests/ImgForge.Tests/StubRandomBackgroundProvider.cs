@@ -3,10 +3,12 @@ using ImgForge.Core.RandomBackgrounds;
 namespace ImgForge.Tests;
 
 /// <summary>A random background provider whose behavior is supplied by the test.</summary>
-internal sealed class StubRandomBackgroundProvider(Func<int, int, CancellationToken, Task<RandomBackgroundImage>> fetch)
+internal sealed class StubRandomBackgroundProvider(
+    Func<int, int, CancellationToken, Task<RandomBackgroundImage>> fetch,
+    string name = "stub.example")
     : IRandomBackgroundProvider
 {
-    public string Name => "stub.example";
+    public string Name => name;
 
     public int Calls { get; private set; }
 

@@ -18,7 +18,7 @@ public class RandomBackgroundResolverTests
         var resolver = new RandomBackgroundResolver(new StubRandomBackgroundProvider((_, _, _) =>
             Task.FromResult(new RandomBackgroundImage(ImageBytes, mediaType))));
 
-        var path = await resolver.ResolveToFileAsync(1200, 630);
+        var path = (await resolver.ResolveToFileAsync(1200, 630)).Path;
         try
         {
             Assert.StartsWith(Path.GetTempPath(), path);
@@ -41,7 +41,7 @@ public class RandomBackgroundResolverTests
             return Task.FromResult(new RandomBackgroundImage(ImageBytes, "image/jpeg"));
         }));
 
-        File.Delete(await resolver.ResolveToFileAsync(1280, 720));
+        File.Delete((await resolver.ResolveToFileAsync(1280, 720)).Path);
 
         Assert.Equal((1280, 720), requested);
     }
@@ -153,7 +153,7 @@ public class RandomBackgroundResolverTests
     {
         var resolver = new RandomBackgroundResolver();
 
-        var picsum = Assert.IsType<PicsumProvider>(resolver.Provider);
+        var picsum = Assert.IsType<PicsumProvider>(Assert.Single(resolver.Providers));
         Assert.Equal(TimeSpan.FromSeconds(5), picsum.ResponseTimeout);
         Assert.Equal(TimeSpan.FromSeconds(30), resolver.DownloadTimeout);
         Assert.Equal(Path.GetTempPath(), resolver.TempDirectory);

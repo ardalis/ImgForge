@@ -59,11 +59,14 @@ Use `random` to download a random image from [picsum.photos](https://picsum.phot
 imgforge generate --template blog --title "My Post" --bg random --format blog
 ```
 
-This requires network access to picsum.photos. ImgForge downloads the image before rendering the template and
-gives the site 5 seconds to start responding (and 30 seconds to finish the download). If picsum.photos is unreachable, slow, or returns an HTTP error (or something
-that isn't an image), the command fails with an error that names the site, and no image is written. Other remote
-background URLs are loaded by the page, which has up to 30 seconds to finish loading, and fail the same way. Try again later,
-use a local image or another URL with `--bg`, or omit `--bg` to use the template's built-in background design.
+This requires network access to the random image provider (currently picsum.photos). ImgForge downloads the image
+before rendering the template. Each provider gets 5 seconds to start responding and 30 seconds to finish the
+download. If a provider is unreachable, slow, or returns an HTTP error (or something that isn't an image), ImgForge
+moves on to the next provider in its list and prints a warning naming the provider that failed. If every provider
+fails, the command fails with an error that lists each provider and why it failed, and no image is written. Other
+remote background URLs are loaded by the page, which has up to 30 seconds to finish loading, and fail the same way.
+Try again later, use a local image or another URL with `--bg`, or omit `--bg` to use the template's built-in
+background design.
 
 ### When Remote Images Fail to Load
 
