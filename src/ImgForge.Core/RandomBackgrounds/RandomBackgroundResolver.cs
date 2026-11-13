@@ -14,8 +14,11 @@ internal sealed class RandomBackgroundResolver
 {
     private readonly IReadOnlyList<IRandomBackgroundProvider> _providers;
 
-    /// <summary>Uses the default provider order.</summary>
-    public RandomBackgroundResolver() : this(new PicsumProvider()) { }
+    /// <summary>
+    /// Uses the default provider order: picsum.photos, then a solid-color placeholder from placehold.co as the last
+    /// resort.
+    /// </summary>
+    public RandomBackgroundResolver() : this(new PicsumProvider(), new PlaceholderProvider()) { }
 
     /// <param name="providers">The providers to try, in order. At least one is required.</param>
     public RandomBackgroundResolver(params IEnumerable<IRandomBackgroundProvider> providers)
