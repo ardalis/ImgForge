@@ -149,12 +149,18 @@ public class RandomBackgroundResolverTests
     }
 
     [Fact]
-    public void DefaultResolver_UsesPicsumWithFiveSecondResponseAndThirtySecondDownloadTimeouts()
+    public void DefaultResolver_UsesPicsumThenPlaceholderWithFiveSecondResponseAndThirtySecondDownloadTimeouts()
     {
         var resolver = new RandomBackgroundResolver();
 
-        var picsum = Assert.IsType<PicsumProvider>(Assert.Single(resolver.Providers));
-        Assert.Equal(TimeSpan.FromSeconds(5), picsum.ResponseTimeout);
+        Assert.Collection(resolver.Providers,
+            p => Assert.Equal(TimeSpan.FromSeconds(5), Assert.IsType<PicsumProvider>(p).ResponseTimeout),
+            p =>
+            {
+                var placeholder = Assert.IsType<PlaceholderProvider>(p);
+                Assert.Equal(TimeSpan.FromSeconds(5), placeholder.ResponseTimeout);
+                Assert.Equal(PlaceholderProvider.DefaultColor, placeholder.Color);
+            });
         Assert.Equal(TimeSpan.FromSeconds(30), resolver.DownloadTimeout);
         Assert.Equal(Path.GetTempPath(), resolver.TempDirectory);
     }

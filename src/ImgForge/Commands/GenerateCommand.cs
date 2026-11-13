@@ -35,7 +35,7 @@ public static class GenerateCommand
 
         var bgOpt = new Option<string?>(
             name: "--bg",
-            description: "Background image: local file path, HTTP(S) URL, or \"random\" (downloads a random image from picsum.photos before rendering). Optional.");
+            description: "Background image: local file path, HTTP(S) URL, or \"random\" (downloads a random image from picsum.photos before rendering, or a solid-color placeholder from placehold.co if picsum.photos fails). Optional.");
 
         var overlayOpt = new Option<string[]>(
             name: "--overlay",
