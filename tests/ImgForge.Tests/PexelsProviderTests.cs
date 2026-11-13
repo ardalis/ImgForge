@@ -97,6 +97,45 @@ public class PexelsProviderTests : IDisposable
         Assert.Equal("https://api.pexels.com/v1/curated?per_page=1&page=30", handler.Requests[1].RequestUri!.AbsoluteUri);
     }
 
+    [Fact]
+    public async Task FetchAsync_RetryPageAlsoEmpty_ThrowsAfterTwoApiCalls()
+    {
+        var handler = Pexels(_ => Json("""{"photos":[],"total_results":30}"""));
+
+        var ex = await Assert.ThrowsAsync<RandomBackgroundProviderException>(
+            () => NewProvider(handler).FetchAsync(1280, 720, CancellationToken.None));
+
+        Assert.Equal("the site returned no photos", ex.Message);
+        Assert.Equal(2, handler.Requests.Count);
+    }
+
+    [Fact]
+    public void ParsePage_NonNumericTotal_StillReturnsPhoto()
+    {
+        var page = PexelsProvider.ParsePage(Encoding.UTF8.GetBytes(
+            """{"total_results":"lots","photos":[{"src":{"original":"https://images.pexels.com/1.jpeg"}}]}"""));
+
+        Assert.NotNull(page.Photo);
+        Assert.Equal(0, page.TotalResults);
+    }
+
+    [Fact]
+    public async Task Resolver_NetworkError_FallsThroughWithoutKey()
+    {
+        var handler = new FakeHttpMessageHandler((_, _) =>
+            throw new HttpRequestException("No such host is known. (api.pexels.com:443)"));
+        var next = new StubRandomBackgroundProvider((_, _, _) =>
+            Task.FromResult(new RandomBackgroundImage(JpegBytes, "image/jpeg")), "next.example");
+
+        var resolved = await new RandomBackgroundResolver(NewProvider(handler), next) { TempDirectory = _tempDir }
+            .ResolveToFileAsync(1280, 720);
+
+        var failure = Assert.Single(resolved.Failures);
+        Assert.Equal("pexels.com", failure.ProviderName);
+        Assert.StartsWith("the site could not be reached", failure.Reason);
+        Assert.DoesNotContain(Key, RandomBackgroundResolver.BuildFallbackWarning(resolved));
+    }
+
     [Theory]
     [InlineData("""{"photos":[],"total_results":0}""")]
     [InlineData("""{"photos":[]}""")]

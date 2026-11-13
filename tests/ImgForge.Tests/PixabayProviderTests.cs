@@ -99,6 +99,26 @@ public class PixabayProviderTests : IDisposable
         Assert.Equal("Photo by b on Pixabay (https://pixabay.com/)", photo.Attribution);
     }
 
+    [Fact]
+    public void ParseHits_LargeImageOnOtherHost_UsesWebformat()
+    {
+        var photo = Assert.Single(PixabayProvider.ParseHits(Encoding.UTF8.GetBytes(
+            """{"hits":[{"largeImageURL":"https://evil.example/a.jpg","webformatURL":"https://pixabay.com/get/a_640.jpg"}]}""")));
+
+        Assert.Equal("https://pixabay.com/get/a_640.jpg", photo.ImageUrl.AbsoluteUri);
+    }
+
+    [Fact]
+    public async Task FetchAsync_KeyWithSurroundingWhitespace_IsTrimmedBeforeEscaping()
+    {
+        var handler = Pixabay();
+
+        await new PixabayProvider(new HttpClient(handler), "  abc 123 \t") { NextRandom = _ => 0 }
+            .FetchAsync(1280, 720, CancellationToken.None);
+
+        Assert.StartsWith("https://pixabay.com/api/?key=abc%20123&", handler.Requests[0].RequestUri!.AbsoluteUri);
+    }
+
     [Theory]
     [InlineData("""{"hits":[]}""")]
     [InlineData("""{"hits":[{"largeImageURL":"https://evil.example/a.jpg"}]}""")]

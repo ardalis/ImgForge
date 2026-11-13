@@ -127,6 +127,8 @@ imgforge generate --template blog --title "My Post" --bg random:pexels --format 
   and prints a credit line such as `Photo by janedoe on Pixabay (https://pixabay.com/photos/...)`. Pixabay doesn't
   require credit but appreciates it. ImgForge downloads the image rather than linking to it, as Pixabay's terms
   require. Pixabay takes the key in the request URL; ImgForge only sends it to `pixabay.com/api/` and never prints it.
+  Pixabay asks API users to cache search results for 24 hours. ImgForge makes one search per run and doesn't cache
+  results between runs, so if you generate many images in a row, keep within its limit of 100 requests per minute.
 
 If a key is rejected or a rate limit is reached, plain `random` moves on to the next provider with a warning. Keys are
 never printed.

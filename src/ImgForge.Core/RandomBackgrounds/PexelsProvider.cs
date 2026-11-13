@@ -110,7 +110,8 @@ internal sealed class PexelsProvider : IRandomBackgroundProvider
             !root.TryGetProperty("photos", out var photos) || photos.ValueKind != JsonValueKind.Array)
             throw new RandomBackgroundProviderException(ApiProviderHelpers.UnexpectedResponse);
 
-        var total = root.TryGetProperty("total_results", out var t) && t.TryGetInt32(out var n) ? Math.Max(n, 0) : 0;
+        var total = root.TryGetProperty("total_results", out var t) && t.ValueKind == JsonValueKind.Number &&
+            t.TryGetInt32(out var n) ? Math.Max(n, 0) : 0;
         if (photos.GetArrayLength() == 0)
             return new PexelsPage(null, total);
 
