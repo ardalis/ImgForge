@@ -1,0 +1,13 @@
+{
+  "extraKnownMarketplaces": {
+    "nimblepros": {
+      "source": {
+        "source": "github",
+        "repo": "NimblePros/claude-plugins"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "workflow@nimblepros": true
+  }
+}
