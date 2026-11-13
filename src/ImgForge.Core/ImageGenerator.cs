@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+using System.Globalization;
 using System.Runtime.InteropServices;
 using PuppeteerSharp;
 
@@ -5,6 +7,11 @@ namespace ImgForge.Core;
 
 public class ImageGenerator(TemplateRenderer renderer)
 {
+    /// <summary>
+    /// How long to wait for the rendered template and all of its resources to load.
+    /// </summary>
+    internal TimeSpan LoadTimeout { get; set; } = TimeSpan.FromSeconds(30);
+
     public async Task<string> GenerateAsync(GenerateOptions opts)
     {
         var html = renderer.Render(opts);
@@ -28,7 +35,24 @@ public class ImageGenerator(TemplateRenderer renderer)
         {
             await File.WriteAllTextAsync(tempHtml, html);
             var fileUri = "file:///" + tempHtml.Replace('\\', '/');
-            await page.GoToAsync(fileUri, new NavigationOptions { WaitUntil = [WaitUntilNavigation.Networkidle0] });
+            // Track in-flight requests so a timeout can name the site(s) that never responded.
+            var pending = new ConcurrentDictionary<IRequest, byte>();
+            page.Request += (_, e) => pending.TryAdd(e.Request, 0);
+            page.RequestFinished += (_, e) => pending.TryRemove(e.Request, out byte _);
+            page.RequestFailed += (_, e) => pending.TryRemove(e.Request, out byte _);
+
+            try
+            {
+                await page.GoToAsync(fileUri, new NavigationOptions
+                {
+                    WaitUntil = [WaitUntilNavigation.Networkidle0],
+                    Timeout = (int)LoadTimeout.TotalMilliseconds
+                });
+            }
+            catch (NavigationException ex) when (IsTimeout(ex))
+            {
+                throw new ImageGenerationTimeoutException(BuildTimeoutMessage(opts, LoadTimeout, GetPendingHosts(pending.Keys)), ex);
+            }
             await page.ScreenshotAsync(opts.Out, new ScreenshotOptions { FullPage = false });
         }
         finally
@@ -38,6 +62,91 @@ public class ImageGenerator(TemplateRenderer renderer)
 
         return opts.Out;
     }
+
+    private static bool IsTimeout(NavigationException ex) =>
+        ex.InnerException is TimeoutException
+        || ex.Message.Contains("timeout", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Returns the distinct hosts of in-flight HTTP(S) requests. For redirected requests the host of the
+    /// original URL is used (e.g. picsum.photos rather than the CDN it redirects to).
+    /// </summary>
+    private static List<string> GetPendingHosts(IEnumerable<IRequest> requests) =>
+        requests
+            .Select(r => r.RedirectChain?.FirstOrDefault()?.Url ?? r.Url)
+            .Select(GetHttpHost)
+            .OfType<string>()
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+    private static string? GetHttpHost(string? url) =>
+        Uri.TryCreate(url, UriKind.Absolute, out var uri)
+        && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps)
+            ? uri.Host
+            : null;
+
+    /// <summary>
+    /// Builds a user-facing explanation of a page-load timeout, naming the remote site(s) responsible
+    /// and suggesting alternatives.
+    /// </summary>
+    /// <param name="opts">The generation options (used to recognise the background source).</param>
+    /// <param name="timeout">The load timeout that elapsed.</param>
+    /// <param name="pendingHosts">Hosts of requests still in flight when the timeout elapsed, if known.</param>
+    internal static string BuildTimeoutMessage(
+        GenerateOptions opts, TimeSpan timeout, IReadOnlyCollection<string>? pendingHosts = null)
+    {
+        var secondsValue = timeout.TotalSeconds.ToString("0.##", CultureInfo.InvariantCulture);
+        var seconds = $"{secondsValue} second{(timeout.TotalSeconds == 1 ? "" : "s")}";
+
+        var bg = opts.Background?.Trim();
+        var isRandomBg = string.Equals(bg, "random", StringComparison.OrdinalIgnoreCase);
+        var bgHost = isRandomBg ? RandomBackgroundHost : GetHttpHost(bg);
+
+        IReadOnlyList<string> hosts = pendingHosts is { Count: > 0 }
+            ? pendingHosts.Distinct(StringComparer.OrdinalIgnoreCase).ToList()
+            : bgHost is not null ? [bgHost] : [];
+
+        if (hosts.Count == 0)
+        {
+            return $"Timed out after {seconds} waiting for the template to finish loading." + Environment.NewLine +
+                   "A remote resource referenced by the template (such as an image, font, or stylesheet) " +
+                   "may be unreachable or responding slowly." + Environment.NewLine +
+                   "Check your network connection and any external URLs in the template, then try again.";
+        }
+
+        var onlyBackground = bgHost is not null
+            && hosts.All(h => string.Equals(h, bgHost, StringComparison.OrdinalIgnoreCase));
+
+        var what = onlyBackground
+            ? isRandomBg
+                ? $"a random background image from {RandomBackgroundHost} (used by --bg random)"
+                : $"the background image from {bgHost}"
+            : $"remote content from {string.Join(", ", hosts)}";
+
+        var lines = new List<string>
+        {
+            $"Timed out after {seconds} waiting for {what} to load.",
+            hosts.Count == 1
+                ? "The site may be unreachable or responding slowly. You can:"
+                : "These sites may be unreachable or responding slowly. You can:",
+            "  - Try again later."
+        };
+
+        if (onlyBackground)
+        {
+            lines.Add("  - Pass a different background with --bg (a local image file or another URL).");
+            lines.Add("  - Omit --bg to use the template's built-in background design.");
+        }
+        else
+        {
+            lines.Add("  - Use local files instead of remote URLs for --bg, --headshot, or --overlay, or omit them.");
+            lines.Add("  - Check your network connection and any external URLs in the template.");
+        }
+
+        return string.Join(Environment.NewLine, lines);
+    }
+
+    private const string RandomBackgroundHost = "picsum.photos";
 
     private static async Task EnsureBrowserAsync()
     {
