@@ -59,6 +59,11 @@ Use `random` to fetch a random image from [picsum.photos](https://picsum.photos)
 imgforge generate --template blog --title "My Post" --bg random --format blog
 ```
 
+This requires network access to picsum.photos. ImgForge waits up to 30 seconds for the page, including all
+remote images, to load. If picsum.photos (or any other remote background URL) is unreachable or slow, the
+command fails with an error that names the site. Try again later, use a local image or another URL with `--bg`,
+or omit `--bg` to use the template's built-in background design.
+
 ## Headshot Images
 
 Add a guest headshot with optional filters:
