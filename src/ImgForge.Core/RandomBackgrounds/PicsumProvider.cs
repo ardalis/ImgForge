@@ -7,8 +7,11 @@ internal sealed class PicsumProvider(HttpClient httpClient) : IRandomBackgroundP
 
     public string Name => "picsum.photos";
 
+    /// <summary>How long picsum.photos has to start responding.</summary>
+    public TimeSpan ResponseTimeout { get; init; } = HttpImageDownloader.DefaultResponseTimeout;
+
     internal static Uri ImageUrl(int width, int height) => new($"https://picsum.photos/{width}/{height}");
 
     public Task<RandomBackgroundImage> FetchAsync(int width, int height, CancellationToken cancellationToken) =>
-        HttpImageDownloader.DownloadImageAsync(httpClient, ImageUrl(width, height), cancellationToken);
+        HttpImageDownloader.DownloadImageAsync(httpClient, ImageUrl(width, height), ResponseTimeout, cancellationToken);
 }

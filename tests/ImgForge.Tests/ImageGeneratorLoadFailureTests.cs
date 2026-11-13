@@ -10,6 +10,7 @@ namespace ImgForge.Tests;
 public class ImageGeneratorLoadFailureTests : IDisposable
 {
     private readonly List<string> _tempFiles = [];
+    private readonly List<string> _tempDirs = [];
 
     [Fact]
     public async Task GenerateAsync_BackgroundConnectionRefused_ThrowsAndWritesNoImage()
@@ -145,19 +146,20 @@ public class ImageGeneratorLoadFailureTests : IDisposable
         var warnings = new StringWriter();
         var generator = NewGenerator();
         generator.Warnings = warnings;
-        generator.RandomBackgrounds = new RandomBackgroundResolver(provider);
-        var tempFilesBefore = RandomBackgroundTempFiles();
+        // A folder name with characters that break naive file URIs in url('...') / src='...'.
+        var tempDir = NewTempDirectory("O'Brien #1 50%");
+        generator.RandomBackgrounds = new RandomBackgroundResolver(provider) { TempDirectory = tempDir };
 
         await generator.GenerateAsync(opts);
 
         Assert.Equal(1, provider.Calls);
         Assert.True(File.Exists(outPath));
         Assert.Equal(string.Empty, warnings.ToString());
-        Assert.Equal(tempFilesBefore, RandomBackgroundTempFiles());
+        Assert.Empty(Directory.GetFiles(tempDir));
     }
 
     [Fact]
-    public async Task GenerateAsync_RandomBackgroundProviderFails_ThrowsBeforeLoadingPageAndWritesNoImage()
+    public async Task GenerateAsync_RandomBackgroundProviderFails_ThrowsAndWritesNoImage()
     {
         var provider = new StubRandomBackgroundProvider((_, _, _) =>
             throw new RandomBackgroundProviderException("the site returned HTTP 522"));
@@ -173,12 +175,49 @@ public class ImageGeneratorLoadFailureTests : IDisposable
         Assert.False(File.Exists(outPath), "No output should be written when the random background fails.");
     }
 
+    [Fact]
+    public async Task GenerateAsync_RandomBackgroundThenRenderFails_DeletesDownloadedImage()
+    {
+        var provider = new StubRandomBackgroundProvider((_, _, _) =>
+            Task.FromResult(new RandomBackgroundImage(Convert.FromBase64String(RedPixelPng), "image/png")));
+        var (opts, _) = CreateOptions("<html>{{ bg | no_such_filter }}</html>", background: "random");
+        var tempDir = NewTempDirectory("bg");
+        var generator = NewGenerator();
+        generator.RandomBackgrounds = new RandomBackgroundResolver(provider) { TempDirectory = tempDir };
+
+        await Assert.ThrowsAnyAsync<Exception>(() => generator.GenerateAsync(opts));
+
+        Assert.Equal(1, provider.Calls);
+        Assert.Empty(Directory.GetFiles(tempDir));
+    }
+
+    [Fact]
+    public async Task GenerateAsync_RandomBackgroundWithMissingTemplate_FailsWithoutDownloading()
+    {
+        var provider = new StubRandomBackgroundProvider((_, _, _) =>
+            Task.FromResult(new RandomBackgroundImage(Convert.FromBase64String(RedPixelPng), "image/png")));
+        var generator = NewGenerator();
+        generator.RandomBackgrounds = new RandomBackgroundResolver(provider);
+        var opts = new GenerateOptions(
+            Template: Path.Combine(Path.GetTempPath(), $"missing-{Guid.NewGuid():N}.html"),
+            Title: "Test", Subtitle: null, Background: "random", Overlays: [], Out: "unused.png");
+
+        await Assert.ThrowsAsync<FileNotFoundException>(() => generator.GenerateAsync(opts));
+
+        Assert.Equal(0, provider.Calls);
+    }
+
     /// <summary>A 1×1 red PNG.</summary>
     private const string RedPixelPng =
         "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==";
 
-    private static HashSet<string> RandomBackgroundTempFiles() =>
-        Directory.GetFiles(Path.GetTempPath(), "imgforge-bg-*").ToHashSet(StringComparer.OrdinalIgnoreCase);
+    private string NewTempDirectory(string name)
+    {
+        var dir = Path.Combine(Directory.CreateTempSubdirectory("imgforge-test-").FullName, name);
+        Directory.CreateDirectory(dir);
+        _tempDirs.Add(Path.GetDirectoryName(dir)!);
+        return dir;
+    }
 
     private static ImageGenerator NewGenerator() =>
         new(new TemplateRenderer()) { LoadTimeout = TimeSpan.FromSeconds(15) };
@@ -218,6 +257,10 @@ public class ImageGeneratorLoadFailureTests : IDisposable
         foreach (var file in _tempFiles)
         {
             try { File.Delete(file); } catch { /* best-effort cleanup */ }
+        }
+        foreach (var dir in _tempDirs)
+        {
+            try { Directory.Delete(dir, recursive: true); } catch { /* best-effort cleanup */ }
         }
         GC.SuppressFinalize(this);
     }

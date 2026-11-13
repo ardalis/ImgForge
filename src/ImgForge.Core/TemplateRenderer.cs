@@ -16,6 +16,9 @@ public class TemplateRenderer
     internal static bool IsRandomBackground(string? background) =>
         string.Equals(background?.Trim(), "random", StringComparison.OrdinalIgnoreCase);
 
+    /// <summary>Throws the same error <see cref="Render"/> would if <paramref name="template"/> can't be loaded.</summary>
+    internal static void EnsureTemplateExists(string template) => _ = LoadTemplateSource(template);
+
     /// <exception cref="InvalidOperationException">
     /// <paramref name="opts"/> still has <c>Background = "random"</c>. <see cref="ImageGenerator"/> downloads the
     /// random image and passes its local path instead.
@@ -139,8 +142,9 @@ public class TemplateRenderer
             return path;
         }
 
-        var fullPath = Path.GetFullPath(path);
-        return $"file:///{fullPath.Replace('\\', '/')}";
+        // Uri escapes spaces, '#' and '%' and uses the right number of slashes on every OS. Apostrophes are
+        // escaped too, because templates embed the value in single-quoted CSS such as url('{{ bg }}').
+        return new Uri(Path.GetFullPath(path)).AbsoluteUri.Replace("'", "%27");
     }
 }
 

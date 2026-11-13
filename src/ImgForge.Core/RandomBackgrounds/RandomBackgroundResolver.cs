@@ -1,17 +1,25 @@
-using System.Globalization;
-
 namespace ImgForge.Core.RandomBackgrounds;
 
 /// <summary>
 /// Downloads the image for <c>--bg random</c> before the template is rendered, so a slow or failing provider
 /// fails fast with a clear message instead of using up the page-load timeout.
 /// </summary>
+/// <remarks>
+/// Providers enforce their own short "start responding" timeout (about 5 seconds). The resolver adds an overall
+/// cap on the whole download, so a large image on a slow connection still has time to arrive.
+/// </remarks>
 internal sealed class RandomBackgroundResolver(IRandomBackgroundProvider provider)
 {
     public RandomBackgroundResolver() : this(new PicsumProvider()) { }
 
-    /// <summary>How long the provider has to return the whole image.</summary>
-    public TimeSpan ProviderTimeout { get; init; } = TimeSpan.FromSeconds(5);
+    /// <summary>The provider used, e.g. for diagnostics and tests.</summary>
+    internal IRandomBackgroundProvider Provider => provider;
+
+    /// <summary>The most time the whole download (response and body) may take.</summary>
+    public TimeSpan DownloadTimeout { get; init; } = TimeSpan.FromSeconds(30);
+
+    /// <summary>Where downloaded images are saved (the system temp folder by default).</summary>
+    internal string TempDirectory { get; init; } = Path.GetTempPath();
 
     /// <summary>Downloads a random image and saves it to a new temp file. The caller owns (and must delete) the file.</summary>
     /// <returns>The full path of the temp file.</returns>
@@ -20,10 +28,12 @@ internal sealed class RandomBackgroundResolver(IRandomBackgroundProvider provide
     {
         var image = await FetchAsync(width, height, cancellationToken);
 
-        var path = Path.Combine(Path.GetTempPath(), $"imgforge-bg-{Guid.NewGuid():N}{ExtensionFor(image.MediaType)}");
+        var path = Path.Combine(TempDirectory, $"imgforge-bg-{Guid.NewGuid():N}{ExtensionFor(image.MediaType)}");
         try
         {
-            await File.WriteAllBytesAsync(path, image.Content, cancellationToken);
+            // CreateNew: never follow or overwrite something already at this path.
+            await using var file = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None);
+            await file.WriteAsync(image.Content, cancellationToken);
         }
         catch
         {
@@ -37,7 +47,7 @@ internal sealed class RandomBackgroundResolver(IRandomBackgroundProvider provide
     private async Task<RandomBackgroundImage> FetchAsync(int width, int height, CancellationToken cancellationToken)
     {
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeout.CancelAfter(ProviderTimeout);
+        timeout.CancelAfter(DownloadTimeout);
 
         try
         {
@@ -45,7 +55,7 @@ internal sealed class RandomBackgroundResolver(IRandomBackgroundProvider provide
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
-            throw Failure($"the site did not respond within {FormatSeconds(ProviderTimeout)}");
+            throw Failure($"the image did not finish downloading within {HttpImageDownloader.FormatSeconds(DownloadTimeout)}");
         }
         catch (RandomBackgroundProviderException ex)
         {
@@ -53,7 +63,7 @@ internal sealed class RandomBackgroundResolver(IRandomBackgroundProvider provide
         }
         catch (HttpRequestException ex)
         {
-            throw Failure($"the site could not be reached ({ex.Message})");
+            throw Failure($"the site could not be reached ({ex.GetBaseException().Message.TrimEnd('.', ' ')})");
         }
     }
 
@@ -75,13 +85,8 @@ internal sealed class RandomBackgroundResolver(IRandomBackgroundProvider provide
         _ => ".jpg"
     };
 
-    private static string FormatSeconds(TimeSpan t)
-    {
-        var value = t.TotalSeconds.ToString("0.##", CultureInfo.InvariantCulture);
-        return $"{value} second{(t.TotalSeconds == 1 ? "" : "s")}";
-    }
-
-    private static void TryDelete(string path)
+    /// <summary>Deletes a file, ignoring failures (e.g. a virus scanner holding it open).</summary>
+    internal static void TryDelete(string path)
     {
         try { File.Delete(path); }
         catch (IOException) { /* best effort */ }

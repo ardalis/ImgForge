@@ -73,40 +73,38 @@ public class RandomBackgroundResolverTests
 
         Assert.StartsWith(
             "Could not load a random background image from stub.example (used by --bg random): " +
-            "the site could not be reached (No such host is known.).",
+            "the site could not be reached (No such host is known).",
             ex.Message);
     }
 
     [Fact]
-    public async Task ResolveToFileAsync_SlowProvider_TimesOutQuicklyWithClearMessage()
+    public async Task ResolveToFileAsync_DownloadExceedsOverallTimeout_ReportsUnfinishedDownload()
     {
         var resolver = new RandomBackgroundResolver(new StubRandomBackgroundProvider(async (_, _, ct) =>
         {
             await Task.Delay(Timeout.Infinite, ct);
             throw new UnreachableException();
         }))
-        { ProviderTimeout = TimeSpan.FromMilliseconds(200) };
+        { DownloadTimeout = TimeSpan.FromMilliseconds(200) };
 
         var stopwatch = Stopwatch.StartNew();
         var ex = await Assert.ThrowsAsync<ImageLoadException>(() => resolver.ResolveToFileAsync(1200, 630));
         stopwatch.Stop();
 
-        Assert.Contains("stub.example (used by --bg random): the site did not respond within 0.2 seconds.", ex.Message);
+        Assert.Contains("stub.example (used by --bg random): the image did not finish downloading within 0.2 seconds.", ex.Message);
         Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(10), $"Took {stopwatch.Elapsed}");
     }
 
     [Fact]
-    public async Task ResolveToFileAsync_HttpClientTimeoutThroughRealHandler_IsReportedAsTimeout()
+    public async Task ResolveToFileAsync_NoResponseThroughRealHandler_ReportsNoResponse()
     {
         var handler = new FakeHttpMessageHandler(async (_, ct) =>
         {
             await Task.Delay(Timeout.Infinite, ct);
             throw new UnreachableException();
         });
-        var resolver = new RandomBackgroundResolver(new PicsumProvider(new HttpClient(handler)))
-        {
-            ProviderTimeout = TimeSpan.FromMilliseconds(200)
-        };
+        var resolver = new RandomBackgroundResolver(
+            new PicsumProvider(new HttpClient(handler)) { ResponseTimeout = TimeSpan.FromMilliseconds(200) });
 
         var ex = await Assert.ThrowsAsync<ImageLoadException>(() => resolver.ResolveToFileAsync(1200, 630));
 
@@ -131,8 +129,33 @@ public class RandomBackgroundResolverTests
     }
 
     [Fact]
-    public void DefaultResolver_UsesFiveSecondTimeout()
+    public async Task ResolveToFileAsync_ProviderFails_LeavesNoTempFile()
     {
-        Assert.Equal(TimeSpan.FromSeconds(5), new RandomBackgroundResolver().ProviderTimeout);
+        var dir = Directory.CreateTempSubdirectory("imgforge-test-").FullName;
+        try
+        {
+            var resolver = new RandomBackgroundResolver(new StubRandomBackgroundProvider((_, _, _) =>
+                throw new RandomBackgroundProviderException("the site returned HTTP 500")))
+            { TempDirectory = dir };
+
+            await Assert.ThrowsAsync<ImageLoadException>(() => resolver.ResolveToFileAsync(1200, 630));
+
+            Assert.Empty(Directory.GetFiles(dir));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void DefaultResolver_UsesPicsumWithFiveSecondResponseAndThirtySecondDownloadTimeouts()
+    {
+        var resolver = new RandomBackgroundResolver();
+
+        var picsum = Assert.IsType<PicsumProvider>(resolver.Provider);
+        Assert.Equal(TimeSpan.FromSeconds(5), picsum.ResponseTimeout);
+        Assert.Equal(TimeSpan.FromSeconds(30), resolver.DownloadTimeout);
+        Assert.Equal(Path.GetTempPath(), resolver.TempDirectory);
     }
 }

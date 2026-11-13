@@ -16,10 +16,15 @@ still the only provider.
 - **Abstraction (internal for now):** `IRandomBackgroundProvider { string Name; Task<RandomBackgroundImage> FetchAsync(int width, int height, CancellationToken) }`.
   `FetchAsync` returns the image bytes and media type, so API-based providers (Unsplash #30) fit later. The
   types are `internal`. The public API surface is kept small until the provider set settles (#29).
-- **`RandomBackgroundResolver`** owns the provider list (just Picsum for now) and the ~5s per-provider timeout.
-  It writes the image to a temp file with an extension that matches the media type, and returns the path.
-  Fallback across several providers is **#25**. This issue keeps the list-shaped API, but the first failure
-  ends the run with a clear error.
+- **`RandomBackgroundResolver`** wraps a single provider (just Picsum for now). Fallback across several
+  providers is **#25**, which will turn this into a list. It writes the image to a temp file with
+  `FileMode.CreateNew` and an extension that matches the media type, and returns the path.
+- **Two timeouts (revised after review):** the provider has **5s to start responding** (headers), which is the
+  fast-fail the issue asks for. The resolver caps the **whole download at 30s**, so a large image on a slow
+  connection isn't cut off. The two have different messages: "the site did not respond within 5 seconds" and
+  "the image did not finish downloading within 30 seconds".
+- **Accepted content types:** only `image/jpeg`, `png`, `webp`, `gif` and `avif`. SVG, HTML and other types
+  are rejected with a clear message instead of silently rendering no background. The body is capped at 50 MB.
 - **Failure handling:** non-2xx status, a non-`image/*` content type, a network error, or the 5s timeout throw
   `ImageLoadException`. The CLI already prints that as `Error: ...` and exits 1. The message names the provider
   and the reason in the same style as #21, for example: `Could not load a random background image from
@@ -32,56 +37,91 @@ still the only provider.
   removed.
 - **`TemplateRenderer.Render` with an unresolved `random`** throws `InvalidOperationException`, explaining that
   `ImageGenerator` resolves it. `IsRandomBackground` stays as the shared check.
-- **HttpClient:** one static instance for the default Picsum provider, so sockets aren't exhausted. Redirects
-  are followed (Picsum redirects to its CDN). The User-Agent is `ImgForge`. The timeout comes from a linked
-  `CancellationTokenSource` in the resolver, not from `HttpClient.Timeout`, so the resolver can tell "timed
-  out" apart from "caller cancelled".
+- **HttpClient:** one static instance for the default Picsum provider (a `SocketsHttpHandler` with a 5-minute
+  `PooledConnectionLifetime`), so sockets aren't exhausted and DNS changes are picked up. Redirects are
+  followed (Picsum redirects to its CDN). The User-Agent is `ImgForge`. Timeouts come from linked
+  `CancellationTokenSource`s, not from `HttpClient.Timeout`, so "timed out" can be told apart from "caller
+  cancelled".
+- **Local file URIs** are now built with `new Uri(path).AbsoluteUri`, with `'` escaped as `%27`. Before, a temp
+  or user path containing `'`, `#`, `%` or a space produced a broken `url('...')` in the built-in templates.
+  This also affects `--bg` and `--headshot` local paths, and fixes them.
+- **Template checked first:** `GenerateAsync` checks that the template loads before downloading, so a bad
+  `--template` is reported right away instead of after a network call.
 - **Tests:** these use a fake `HttpMessageHandler`, with no live network. The timeout test injects a short
   timeout.
 
 ## Phase 1 — Provider abstraction (`src/ImgForge.Core/RandomBackgrounds/`)
 
-- [ ] `IRandomBackgroundProvider`, `RandomBackgroundImage` record
-- [ ] `PicsumProvider(HttpClient)`: builds the URL, checks the status and the `image/*` content type, and
+- [x] `IRandomBackgroundProvider`, `RandomBackgroundImage` record
+- [x] `PicsumProvider(HttpClient)`: builds the URL, checks the status and the `image/*` content type, and
       returns the bytes
-- [ ] `RandomBackgroundResolver`: per-provider timeout, temp file write, extension from the media type,
+- [x] `RandomBackgroundResolver`: per-provider timeout, temp file write, extension from the media type,
       `ImageLoadException` with a provider-specific message
 
 ## Phase 2 — Wire into rendering
 
-- [ ] `ImageGenerator`: resolve before render, substitute the temp path, delete it in `finally`. Add an
+- [x] `ImageGenerator`: resolve before render, substitute the temp path, delete it in `finally`. Add an
       internal `RandomBackgrounds` property so tests can inject a resolver.
-- [ ] `TemplateRenderer`: remove `RandomBackgroundUrl`, throw for unresolved `random`
-- [ ] `ResourceLoadFailures`: remove `RandomBackground` source and constant
-- [ ] `ImageGenerator.BuildTimeoutMessage`: remove random/picsum branch and constant
-- [ ] Update `--bg` help text, the README (options table and the template `bg` variable row), and the docs site
+- [x] `TemplateRenderer`: remove `RandomBackgroundUrl`, throw for unresolved `random`
+- [x] `ResourceLoadFailures`: remove `RandomBackground` source and constant
+- [x] `ImageGenerator.BuildTimeoutMessage`: remove random/picsum branch and constant
+- [x] Update `--bg` help text, the README (options table and the template `bg` variable row), and the docs site
       where they say picsum's URL is handed to the template
 
 ## Phase 3 — Automated tests (`tests/ImgForge.Tests`)
 
-- [ ] Unit `PicsumProviderTests`: URL (`https://picsum.photos/{w}/{h}`), success returns bytes and media type,
+- [x] Unit `PicsumProviderTests`: URL (`https://picsum.photos/{w}/{h}`), success returns bytes and media type,
       non-2xx and non-image throw
-- [ ] Unit `RandomBackgroundResolverTests`: writes a temp file with the correct extension and contents. HTTP
+- [x] Unit `RandomBackgroundResolverTests`: writes a temp file with the correct extension and contents. HTTP
       522, network error, non-image and timeout each give an `ImageLoadException` that names `picsum.photos`
       and the reason within the timeout. Caller cancellation propagates as `OperationCanceledException`.
-- [ ] Unit `TemplateRendererTests`: an unresolved `random` throws
-- [ ] Update `ResourceLoadFailuresTests` and `ImageGeneratorTimeoutMessageTests` to drop the removed
+- [x] Unit `TemplateRendererTests`: an unresolved `random` throws
+- [x] Update `ResourceLoadFailuresTests` and `ImageGeneratorTimeoutMessageTests` to drop the removed
       random/picsum cases (they no longer apply)
-- [ ] Integration (`Category=Integration`): `GenerateAsync` with `--bg random` and a fake provider produces a
+- [x] Integration (`Category=Integration`): `GenerateAsync` with `--bg random` and a fake provider produces a
       PNG and deletes the temp background. A failing provider throws `ImageLoadException`, writes no PNG, and
       doesn't launch the page.
 
 ## Phase 4 — Independent review
 
-- [ ] A separate agent with fresh context reviews the full diff against #24: correctness, missed requirements,
+- [x] A separate agent with fresh context reviews the full diff against #24: correctness, missed requirements,
       test gaps, regressions, security (temp file handling, URL/content handling), performance and
       accessibility
-- [ ] Address all significant findings, and record any skipped findings with the reason below
+- [x] Address all significant findings, and record any skipped findings with the reason below
 
 ## Phase 5 — Final verification
 
-- [ ] `dotnet BuildTestFormat.cs` passes (build, all tests, `dotnet format --verify-no-changes`)
+- [x] `dotnet BuildTestFormat.cs` passes (build, all tests, `dotnet format --verify-no-changes`)
 
 ## Review notes
 
-_(filled in after Phase 4)_
+A separate general-purpose agent with fresh context reviewed `git diff main...HEAD`. It found no blocking issues.
+
+Addressed:
+1. **File URI escaping (medium):** temp paths containing `'`, `#` or `%` broke `url('...')`. Fixed in
+   `TemplateRenderer.ResolveLocalPath`. The renderer test and the end-to-end integration test use a folder
+   named `O'Brien #1 50%`, and mutation-checking against the old code makes both tests fail.
+2. **Flaky temp-file assertion (medium):** the test that snapshotted the shared temp folder now uses its own
+   `TempDirectory` and asserts that the folder is empty afterwards.
+3. **Timeout covered the whole body, and the message said "did not respond" (medium):** split into a 5s
+   response timeout and a 30s overall download timeout, each with its own message and tests (including one
+   where the body is slower than the response timeout).
+4. **A failed delete in `finally` could hide the real error:** now best-effort `TryDelete`.
+5. **The image was downloaded before the template was checked:** the template is now checked first, and a test
+   asserts that the provider is never called.
+6. **Any `image/*` was trusted:** restricted to raster types Chromium can draw.
+8. **Temp file creation:** now `FileMode.CreateNew`.
+9. **DNS staleness:** `PooledConnectionLifetime` set on the shared handler.
+10. **Untidy network error text:** now uses `GetBaseException().Message` with the trailing period trimmed.
+12. **Test gaps:** added a test that the temp file is deleted when rendering fails after the download, a test
+   for the default resolver configuration, and a test that nothing is left behind when the provider fails.
+   Fixed the leaked `GetTempFileName` file in the renderer test. Removed the "before loading page" claim from a
+   test name that didn't prove it.
+13. **Docs:** fixed the inconsistent README comment, and documented the 5s and 30s timeouts accurately.
+
+Not changed (deliberately):
+- **7. The image is held in memory twice (up to about 100 MB at the cap):** acceptable for a CLI, and keeping
+  `RandomBackgroundImage` as bytes keeps the provider contract simple for #26–#31. Streaming straight to disk
+  can follow if large images become a concern.
+- **11. `TemplateRenderer.Render` now throws for an unresolved `random`:** intended (see Decisions), and called
+  out in the PR description as a behavior change for anyone using the library directly.

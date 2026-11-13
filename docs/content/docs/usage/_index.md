@@ -60,7 +60,7 @@ imgforge generate --template blog --title "My Post" --bg random --format blog
 ```
 
 This requires network access to picsum.photos. ImgForge downloads the image before rendering the template and
-gives the site 5 seconds to respond. If picsum.photos is unreachable, slow, or returns an HTTP error (or something
+gives the site 5 seconds to start responding (and 30 seconds to finish the download). If picsum.photos is unreachable, slow, or returns an HTTP error (or something
 that isn't an image), the command fails with an error that names the site, and no image is written. Other remote
 background URLs are loaded by the page, which has up to 30 seconds to finish loading, and fail the same way. Try again later,
 use a local image or another URL with `--bg`, or omit `--bg` to use the template's built-in background design.

@@ -109,6 +109,96 @@ public class PicsumProviderTests
         Assert.StartsWith("the image is larger than", ex.Message);
     }
 
+    [Theory]
+    [InlineData("image/svg+xml")]
+    [InlineData("image/tiff")]
+    public async Task FetchAsync_UnsupportedImageType_Throws(string mediaType)
+    {
+        var handler = FakeHttpMessageHandler.Returning(() => FakeHttpMessageHandler.Image(JpegBytes, mediaType));
+        var provider = new PicsumProvider(new HttpClient(handler));
+
+        var ex = await Assert.ThrowsAsync<RandomBackgroundProviderException>(
+            () => provider.FetchAsync(100, 100, CancellationToken.None));
+
+        Assert.Equal($"the site returned an unsupported image type ({mediaType})", ex.Message);
+    }
+
+    [Fact]
+    public async Task FetchAsync_NoResponseWithinResponseTimeout_ThrowsNoResponse()
+    {
+        var handler = new FakeHttpMessageHandler(async (_, ct) =>
+        {
+            await Task.Delay(Timeout.Infinite, ct);
+            throw new InvalidOperationException("unreachable");
+        });
+        var provider = new PicsumProvider(new HttpClient(handler)) { ResponseTimeout = TimeSpan.FromMilliseconds(100) };
+
+        var ex = await Assert.ThrowsAsync<RandomBackgroundProviderException>(
+            () => provider.FetchAsync(100, 100, CancellationToken.None));
+
+        Assert.Equal("the site did not respond within 0.1 seconds", ex.Message);
+    }
+
+    [Fact]
+    public async Task FetchAsync_SlowBodyAfterPromptHeaders_IsNotCutOffByResponseTimeout()
+    {
+        // Headers arrive immediately; the body trickles in for longer than the response timeout.
+        var handler = FakeHttpMessageHandler.Returning(() =>
+        {
+            var body = new StreamContent(new SlowStream(JpegBytes, TimeSpan.FromMilliseconds(300)));
+            body.Headers.ContentType = new("image/jpeg");
+            return new HttpResponseMessage(HttpStatusCode.OK) { Content = body };
+        });
+        var provider = new PicsumProvider(new HttpClient(handler)) { ResponseTimeout = TimeSpan.FromMilliseconds(100) };
+
+        var image = await provider.FetchAsync(100, 100, CancellationToken.None);
+
+        Assert.Equal(JpegBytes, image.Content);
+    }
+
+    [Fact]
+    public async Task FetchAsync_CallerCancels_PropagatesCancellation()
+    {
+        using var cts = new CancellationTokenSource();
+        var handler = new FakeHttpMessageHandler(async (_, ct) =>
+        {
+            await cts.CancelAsync();
+            await Task.Delay(Timeout.Infinite, ct);
+            throw new InvalidOperationException("unreachable");
+        });
+        var provider = new PicsumProvider(new HttpClient(handler));
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => provider.FetchAsync(100, 100, cts.Token));
+    }
+
+    /// <summary>Returns <paramref name="content"/> only after <paramref name="delay"/>.</summary>
+    private sealed class SlowStream(byte[] content, TimeSpan delay) : Stream
+    {
+        private readonly MemoryStream _inner = new(content);
+        private bool _waited;
+
+        public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            if (!_waited)
+            {
+                await Task.Delay(delay, cancellationToken);
+                _waited = true;
+            }
+            return await _inner.ReadAsync(buffer, cancellationToken);
+        }
+
+        public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => throw new NotSupportedException();
+        public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
+        public override void Flush() { }
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+    }
+
     /// <summary>A non-seekable stream of zeros that never ends.</summary>
     private sealed class EndlessStream : Stream
     {

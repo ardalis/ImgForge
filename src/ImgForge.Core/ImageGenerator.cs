@@ -31,6 +31,8 @@ public class ImageGenerator(TemplateRenderer renderer)
         {
             if (TemplateRenderer.IsRandomBackground(opts.Background))
             {
+                // Report a bad --template before spending time on (or failing) a download.
+                TemplateRenderer.EnsureTemplateExists(opts.Template);
                 randomBackgroundFile = await RandomBackgrounds.ResolveToFileAsync(opts.Width, opts.Height);
                 opts = opts with { Background = randomBackgroundFile };
             }
@@ -39,8 +41,9 @@ public class ImageGenerator(TemplateRenderer renderer)
         }
         finally
         {
-            if (randomBackgroundFile is not null && File.Exists(randomBackgroundFile))
-                File.Delete(randomBackgroundFile);
+            // Best effort, so a locked temp file can't hide the real error.
+            if (randomBackgroundFile is not null)
+                RandomBackgroundResolver.TryDelete(randomBackgroundFile);
         }
     }
 

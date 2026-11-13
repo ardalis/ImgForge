@@ -274,10 +274,10 @@ public class TemplateRendererTests
     }
 
     [Fact]
-    public void Render_LocalBackgroundFile_BecomesFileUri()
+    public void Render_LocalBackgroundFile_BecomesEscapedFileUri()
     {
-        var bgFile = Path.Combine(Path.GetTempPath(), "imgforge-bg-test.jpg");
-        var templateFile = Path.GetTempFileName() + ".html";
+        var bgFile = Path.Combine(Path.GetTempPath(), "O'Brien #1 50%", "bg.jpg");
+        var templateFile = Path.Combine(Path.GetTempPath(), $"imgforge-test-{Guid.NewGuid():N}.html");
         try
         {
             File.WriteAllText(templateFile, "<div style=\"background-image:url('{{ bg }}')\"></div>");
@@ -291,7 +291,12 @@ public class TemplateRendererTests
 
             var html = _renderer.Render(opts);
 
-            Assert.Contains("file:///" + bgFile.Replace('\\', '/'), html);
+            var uri = html[(html.IndexOf("url('", StringComparison.Ordinal) + 5)..html.IndexOf("')", StringComparison.Ordinal)];
+            Assert.StartsWith("file:///", uri);
+            Assert.DoesNotContain("'", uri);
+            Assert.DoesNotContain(" ", uri);
+            Assert.DoesNotContain("#", uri);
+            Assert.Equal(Path.GetFullPath(bgFile), new Uri(uri).LocalPath);
         }
         finally
         {
