@@ -23,7 +23,7 @@ imgforge generate \
 | `--template` | No | `.tools/imgforge/template.html` | Built-in template name (`blog`, `youtube`, `blog-subtitle`) or path to a `.html` file or a directory containing `template.html`. If omitted, a default template is looked up (see [Default Template Path](templates/#default-template-path)); it's an error if none is found |
 | `--title` | Yes | — | Main heading text injected into the template |
 | `--subtitle` | No | — | Optional subtitle rendered below the title in templates that support it (e.g. `blog-subtitle`) |
-| `--bg` | No | — | Background image: local file path, HTTP(S) URL, or `random` (downloads a random image from [picsum.photos](https://picsum.photos) before rendering, falling back to a solid-color placeholder from [placehold.co](https://placehold.co)) |
+| `--bg` | No | — | Background image: local file path, HTTP(S) URL, `random` (downloads a random image from [picsum.photos](https://picsum.photos) before rendering, falling back to a solid-color placeholder from [placehold.co](https://placehold.co)), or `random:<provider>` to use one provider only (see [Random Image](#random-image)) |
 | `--overlay` | No | — | Overlay image source. Repeatable for multiple overlays. Passed to the template as-is (see [Overlay Images](#overlay-images)) |
 | `--headshot` | No | — | Guest headshot image (local path or HTTP(S) URL) placed in the template's headshot slot |
 | `--headshot-filter` | No | `blue-mono` | Filter applied to the headshot. Built-in: `blue-mono`, `mono`, `none`. Or supply a raw CSS `filter` string |
@@ -60,14 +60,35 @@ uses a solid dark-slate image from [placehold.co](https://placehold.co) instead,
 imgforge generate --template blog --title "My Post" --bg random --format blog
 ```
 
-This requires network access to the random image providers (picsum.photos, then placehold.co). ImgForge downloads the image
-before rendering the template. Each provider gets 5 seconds to start responding and 30 seconds to finish the
-download. If a provider is unreachable, slow, or returns an HTTP error (or something that isn't an image), ImgForge
-moves on to the next provider in its list and prints a warning naming the provider that failed. If every provider
-fails, the command fails with an error that lists each provider and why it failed, and no image is written. Other
-remote background URLs are loaded by the page, which has up to 30 seconds to finish loading, and fail the same way.
-Try again later, use a local image or another URL with `--bg`, or omit `--bg` to use the template's built-in
-background design.
+To use one provider only, use `random:<provider>`. There's no fallback, so if that provider fails, the command fails
+with an error naming it (use plain `random` to try each provider in turn):
+
+| `--bg` value | Image |
+|---|---|
+| `random` | Default: [picsum.photos](https://picsum.photos), falling back to [placehold.co](https://placehold.co) |
+| `random:picsum` | A random photo from picsum.photos |
+| `random:loremflickr` | A random Flickr photo from [loremflickr.com](https://loremflickr.com) matching `abstract` (currently unreliable, see below) |
+| `random:loremflickr:<keyword>` | A loremflickr.com photo matching a keyword, or several separated by commas (e.g. `technology` or `city,night`) |
+| `random:placeholder` | A solid dark-slate (`#1e293b`) image from placehold.co |
+| `random:placeholder:<color>` | A solid image in a 6-digit hex color (e.g. `0f172a` or `#0F172A`) |
+
+```bash
+imgforge generate --template blog --title "My Post" --bg random:placeholder:0f172a --format blog
+```
+
+LoremFlickr isn't in the default order because loremflickr.com image requests have been failing (HTTP 500 as of
+November 2026). If you pick it while it's down, you get an error naming the HTTP status. An unknown provider name or an
+invalid keyword or color fails right away, with an error listing what's valid. A local file whose name starts with
+`random:` (possible on Linux and macOS) needs a path prefix, e.g. `--bg ./random:photo.jpg`.
+
+This requires network access to the random image providers. ImgForge downloads the image before rendering the
+template. Each provider gets 5 seconds to start responding and 30 seconds to finish the download. With plain
+`random`, if a provider is unreachable, slow, or returns an HTTP error (or something that isn't an image), ImgForge
+moves on to the next provider in its list (picsum.photos, then placehold.co) and prints a warning naming the provider
+that failed. If every provider fails, the command fails with an error that lists each provider and why it failed,
+and no image is written. Other remote background URLs are loaded by the page, which has up to 30 seconds to finish
+loading, and fail the same way. Try again later, use a local image or another URL with `--bg`, or omit `--bg` to use
+the template's built-in background design.
 
 ### When Remote Images Fail to Load
 

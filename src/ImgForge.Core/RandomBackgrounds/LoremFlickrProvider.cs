@@ -35,7 +35,7 @@ internal sealed partial class LoremFlickrProvider(HttpClient httpClient) : IRand
         init
         {
             ArgumentNullException.ThrowIfNull(value);
-            if (value.Length > MaxKeywordLength || !KeywordPattern().IsMatch(value))
+            if (!IsValidKeyword(value))
                 throw new ArgumentException(
                     $"Invalid LoremFlickr keyword \"{value}\". Use one or more keywords separated by commas, " +
                     $"each made of letters, digits, '-' or '_', up to {MaxKeywordLength} characters in total " +
@@ -59,6 +59,10 @@ internal sealed partial class LoremFlickrProvider(HttpClient httpClient) : IRand
             field = value;
         }
     }
+
+    /// <summary>True when <paramref name="value"/> is an acceptable <see cref="Keyword"/>.</summary>
+    internal static bool IsValidKeyword(string value) =>
+        value.Length <= MaxKeywordLength && KeywordPattern().IsMatch(value);
 
     internal Uri ImageUrl(int width, int height)
     {

@@ -102,7 +102,7 @@ Templates use [Scriban](https://github.com/scriban/scriban) Liquid syntax for va
 |---|---|---|
 | `title` | `string` | Main heading text |
 | `subtitle` | `string` | Optional subtitle text — empty string when `--subtitle` is not supplied; guard with `{% if subtitle %}` in templates |
-| `bg` | `string` | Background image URI — local paths become `file:///` URIs, HTTP(S) URLs are passed through, and `random` becomes a `file:///` URI for a random image ImgForge downloaded (from picsum.photos, or a solid-color placeholder from placehold.co if picsum.photos fails) before rendering. Empty string when `--bg` is not supplied |
+| `bg` | `string` | Background image URI — local paths become `file:///` URIs, HTTP(S) URLs are passed through, and `random` (or `random:<provider>`) becomes a `file:///` URI for the random image ImgForge downloaded before rendering (see [Random Image](../#random-image)). Empty string when `--bg` is not supplied |
 | `width` | `int` | Viewport width in pixels |
 | `height` | `int` | Viewport height in pixels |
 | `overlays` | array | List of `{ src, style }` overlay image objects, one per `--overlay`. `src` is the command-line value, unchanged; `style` is always empty from the CLI |

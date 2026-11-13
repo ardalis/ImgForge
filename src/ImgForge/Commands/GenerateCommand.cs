@@ -1,5 +1,6 @@
 using System.CommandLine;
 using ImgForge.Core;
+using ImgForge.Core.RandomBackgrounds;
 
 namespace ImgForge.Commands;
 
@@ -35,7 +36,11 @@ public static class GenerateCommand
 
         var bgOpt = new Option<string?>(
             name: "--bg",
-            description: "Background image: local file path, HTTP(S) URL, or \"random\" (downloads a random image from picsum.photos before rendering, or a solid-color placeholder from placehold.co if picsum.photos fails). Optional.");
+            description: "Background image: local file path, HTTP(S) URL, or \"random\". " +
+                         "\"random\" downloads a random image from picsum.photos before rendering, or a solid-color placeholder from placehold.co if picsum.photos fails. " +
+                         "\"random:<provider>\" uses only that provider (no fallback): picsum, loremflickr (optionally random:loremflickr:<keyword>, e.g. random:loremflickr:technology; " +
+                         "loremflickr.com has been unreliable, so it isn't in the default order), " +
+                         "or placeholder (optionally random:placeholder:<hex color>, e.g. random:placeholder:0f172a). Optional.");
 
         var overlayOpt = new Option<string[]>(
             name: "--overlay",
@@ -129,6 +134,9 @@ public static class GenerateCommand
 
             try
             {
+                // Catch a mistyped --bg random:<provider> before resolving the template or prompting for a format.
+                ValidateBackground(bg);
+
                 var (resolvedTemplate, usedDefaultTemplate) = TemplatePathResolver.ResolveTemplate(template);
                 if (usedDefaultTemplate)
                 {
@@ -185,6 +193,14 @@ public static class GenerateCommand
         });
 
         return cmd;
+    }
+
+    /// <summary>Checks a <c>--bg random[:provider[:option]]</c> value. Other backgrounds aren't checked here.</summary>
+    /// <exception cref="ArgumentException">The random background names an unknown provider or has an invalid option.</exception>
+    internal static void ValidateBackground(string? background)
+    {
+        if (RandomBackgroundSpec.IsRandom(background))
+            _ = RandomBackgroundSpec.Parse(background!);
     }
 
     internal static (int Width, int Height)? ResolvePresetDimensions(string? format) =>

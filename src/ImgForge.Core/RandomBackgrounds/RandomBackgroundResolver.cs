@@ -38,6 +38,13 @@ internal sealed class RandomBackgroundResolver
     /// <summary>The most time one provider's whole download (response and body) may take.</summary>
     public TimeSpan DownloadTimeout { get; init; } = TimeSpan.FromSeconds(30);
 
+    /// <summary>
+    /// The <c>--bg</c> value this resolver serves, e.g. <c>--bg random:picsum</c>, used in error messages. Anything other
+    /// than <see cref="RandomBackgroundSpec.DefaultOptionText"/> means a single provider was chosen, so the error also
+    /// suggests plain <c>--bg random</c>.
+    /// </summary>
+    public string BackgroundOption { get; init; } = RandomBackgroundSpec.DefaultOptionText;
+
     /// <summary>Where downloaded images are saved (the system temp folder by default).</summary>
     internal string TempDirectory { get; init; } = Path.GetTempPath();
 
@@ -64,7 +71,7 @@ internal sealed class RandomBackgroundResolver
             return new ResolvedRandomBackground(path, provider.Name, failures);
         }
 
-        throw new ImageLoadException(BuildErrorMessage(failures));
+        throw new ImageLoadException(BuildErrorMessage(failures, BackgroundOption));
     }
 
     private async Task<(RandomBackgroundImage? Image, string? FailureReason)> TryFetchAsync(
@@ -115,22 +122,28 @@ internal sealed class RandomBackgroundResolver
     }
 
     /// <summary>Builds the user-facing message for when every provider failed.</summary>
-    internal static string BuildErrorMessage(IReadOnlyList<RandomBackgroundProviderFailure> failures)
+    /// <param name="failures">Every provider that was tried, in order.</param>
+    /// <param name="backgroundOption">The <c>--bg</c> value, e.g. <c>--bg random</c> or <c>--bg random:picsum</c>.</param>
+    internal static string BuildErrorMessage(
+        IReadOnlyList<RandomBackgroundProviderFailure> failures,
+        string backgroundOption = RandomBackgroundSpec.DefaultOptionText)
     {
         var lines = new List<string>();
         if (failures.Count == 1)
         {
             lines.Add($"Could not load a random background image from {failures[0].ProviderName} " +
-                $"(used by --bg random): {failures[0].Reason}.");
+                $"(used by {backgroundOption}): {failures[0].Reason}.");
         }
         else
         {
-            lines.Add("Could not load a random background image for --bg random. Every provider failed:");
+            lines.Add($"Could not load a random background image for {backgroundOption}. Every provider failed:");
             lines.AddRange(failures.Select(f => $"  - {f.ProviderName}: {f.Reason}"));
         }
 
         lines.Add("You can:");
         lines.Add("  - Check your network connection, then try again later.");
+        if (backgroundOption != RandomBackgroundSpec.DefaultOptionText)
+            lines.Add($"  - Use {RandomBackgroundSpec.DefaultOptionText} to try each provider in turn instead of only this one.");
         lines.Add("  - Pass a different background with --bg (a local image file or another URL), " +
             "or omit --bg to use the template's built-in background design.");
         return string.Join(Environment.NewLine, lines);

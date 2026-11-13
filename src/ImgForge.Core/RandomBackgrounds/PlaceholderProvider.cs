@@ -36,14 +36,18 @@ internal sealed partial class PlaceholderProvider(HttpClient httpClient) : IRand
         init
         {
             ArgumentNullException.ThrowIfNull(value);
-            var hex = value.StartsWith('#') ? value[1..] : value;
-            if (!ColorPattern().IsMatch(hex))
+            if (!IsValidColor(value))
                 throw new ArgumentException(
                     $"Invalid placeholder color \"{value}\". Use a 6-digit hex color such as 1e293b or #1E293B.",
                     nameof(Color));
-            field = hex.ToLowerInvariant();
+            field = StripHash(value).ToLowerInvariant();
         }
     } = DefaultColor;
+
+    /// <summary>True when <paramref name="value"/> is an acceptable <see cref="Color"/>.</summary>
+    internal static bool IsValidColor(string value) => ColorPattern().IsMatch(StripHash(value));
+
+    private static string StripHash(string value) => value.StartsWith('#') ? value[1..] : value;
 
     internal Uri ImageUrl(int width, int height) =>
         new($"https://placehold.co/{width}x{height}/{Color}/{Color}/png");
