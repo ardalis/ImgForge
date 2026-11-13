@@ -15,9 +15,12 @@ internal sealed partial class PlaceholderProvider(HttpClient httpClient) : IRand
     /// <summary>The color used when none is given: a dark slate, so the templates' white text stays readable.</summary>
     public const string DefaultColor = "1e293b";
 
+    /// <summary>The provider's <see cref="Name"/>.</summary>
+    public const string ProviderName = "placehold.co";
+
     public PlaceholderProvider() : this(HttpImageDownloader.SharedClient) { }
 
-    public string Name => "placehold.co";
+    public string Name => ProviderName;
 
     /// <summary>How long placehold.co has to start responding.</summary>
     public TimeSpan ResponseTimeout { get; init; } = HttpImageDownloader.DefaultResponseTimeout;

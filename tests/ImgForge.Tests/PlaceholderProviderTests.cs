@@ -136,7 +136,8 @@ public class PlaceholderProviderTests : IDisposable
         Assert.Equal(new RandomBackgroundProviderFailure("picsum.photos", "the site returned HTTP 522"),
             Assert.Single(resolved.Failures));
         Assert.Equal(
-            "Warning: picsum.photos failed (the site returned HTTP 522). Used placehold.co for --bg random instead.",
+            "Warning: picsum.photos failed (the site returned HTTP 522). Used placehold.co for --bg random instead " +
+            "(a solid-color background, not a photo).",
             RandomBackgroundResolver.BuildFallbackWarning(resolved));
     }
 

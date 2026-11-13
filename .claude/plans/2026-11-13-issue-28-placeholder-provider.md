@@ -26,7 +26,7 @@ provider order after Picsum so `--bg random` almost always yields *something* (w
 - **Offline fallback (issue task "consider"):** generating a solid/gradient PNG locally would be fully offline and
   can't fail. It's preferable as the *final* step after placehold.co, not instead of it, but it's a separate change
   (PNG encoding without an image library, and a resolver path that doesn't need HTTP). Deferred: recommended as a
-  follow-up issue; noted in a comment on #28.
+  follow-up in a comment on #28.
 
 ## Phase 1 — Provider (`src/ImgForge.Core/RandomBackgrounds/PlaceholderProvider.cs`)
 
@@ -52,14 +52,27 @@ provider order after Picsum so `--bg random` almost always yields *something* (w
 
 ## Phase 5 — Independent review
 
-- [ ] Separate agent with fresh context reviews the full diff against #28 (correctness, missed requirements, test
+- [x] Separate agent with fresh context reviews the full diff against #28 (correctness, missed requirements, test
       gaps, regressions, security, performance, accessibility)
-- [ ] Address all significant findings; record skipped ones below
+- [x] Address all significant findings; record skipped ones below
 
 ## Phase 6 — Final verification
 
-- [ ] `dotnet BuildTestFormat.cs` passes (build, all tests, `dotnet format --verify-no-changes`)
+- [x] `dotnet BuildTestFormat.cs` passes (build, all tests, `dotnet format --verify-no-changes`)
 
 ## Review notes
 
-(pending)
+A separate general-purpose agent with fresh context reviewed `git diff origin/main...HEAD`. It found no significant
+issues. It re-checked placehold.co (200 `image/png`, 4000 px cap), confirmed the `Color` pattern can't alter the URL,
+that white text on `#1e293b` is about 14.6:1 contrast (WCAG AAA), and that only the default-resolver test depended on
+the provider list. Four low-severity items:
+
+1. **Offline-fallback deferral not recorded on #28:** addressed by posting a comment on #28.
+2. **Fallback warning didn't say the result is a solid color:** addressed. When placehold.co supplies the image the
+   warning now ends "(a solid-color background, not a photo)." (`PlaceholderProvider.ProviderName` constant; test
+   updated).
+3. **Worst-case wait before total failure roughly doubles with a second provider (hanging network):** not changed.
+   It's the accepted cost of a fallback; a normal offline failure is immediate, and a shorter placeholder timeout
+   would make the last resort less reliable.
+4. **New HTTP error/SVG/timeout tests overlap existing `HttpImageDownloader` coverage:** not changed; matches the
+   existing per-provider test convention.

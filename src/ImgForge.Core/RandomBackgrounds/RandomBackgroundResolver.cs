@@ -140,7 +140,8 @@ internal sealed class RandomBackgroundResolver
     internal static string BuildFallbackWarning(ResolvedRandomBackground resolved) =>
         "Warning: " +
         string.Join("; ", resolved.Failures.Select(f => $"{f.ProviderName} failed ({f.Reason})")) +
-        $". Used {resolved.ProviderName} for --bg random instead.";
+        $". Used {resolved.ProviderName} for --bg random instead" +
+        (resolved.ProviderName == PlaceholderProvider.ProviderName ? " (a solid-color background, not a photo)." : ".");
 
     internal static string ExtensionFor(string mediaType) => mediaType switch
     {
