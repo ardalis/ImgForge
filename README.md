@@ -106,7 +106,7 @@ imgforge generate \
 | `--template` | No | `.tools/imgforge/template.html` | Built-in template name (`blog`, `youtube`, `blog-subtitle`) or path to a `.html` file or a directory containing `template.html`. If omitted, a default template is looked up (see [Custom Templates](#custom-templates)); it's an error if none is found |
 | `--title` | Yes | — | Main heading text injected into the template |
 | `--subtitle` | No | — | Optional subtitle rendered below the title in templates that support it (e.g. `blog-subtitle`) |
-| `--bg` | No | — | Background image: local file path, HTTP(S) URL, `random`, or `random:<provider>` (see [Random backgrounds](#random-backgrounds)). `random` downloads a random image before rendering, from [picsum.photos](https://picsum.photos) (or first from Unsplash when `UNSPLASH_ACCESS_KEY` is set), falling back to a solid dark-slate placeholder from [placehold.co](https://placehold.co) so you still get an image; providers are tried in order, and one that doesn't start responding within 5 seconds, takes over 30 seconds to download, or returns an error is skipped with a warning; if every provider fails, the command fails with an error listing each provider and why it failed). The page, including remote images, must finish loading within 30 seconds. If a remote background is unreachable or returns an HTTP error, the command fails with an error naming the site (no image is written) so you can retry later or choose a different background |
+| `--bg` | No | — | Background image: local file path, HTTP(S) URL, `random`, or `random:<provider>` (see [Random backgrounds](#random-backgrounds)). `random` downloads a random image before rendering, from [picsum.photos](https://picsum.photos) (or first from Unsplash, Pexels, or Pixabay when `UNSPLASH_ACCESS_KEY`, `PEXELS_API_KEY`, or `PIXABAY_API_KEY` is set), falling back to a solid dark-slate placeholder from [placehold.co](https://placehold.co) so you still get an image; providers are tried in order, and one that doesn't start responding within 5 seconds, takes over 30 seconds to download, or returns an error is skipped with a warning; if every provider fails, the command fails with an error listing each provider and why it failed). The page, including remote images, must finish loading within 30 seconds. If a remote background is unreachable or returns an HTTP error, the command fails with an error naming the site (no image is written) so you can retry later or choose a different background |
 | `--overlay` | No | — | Overlay image source. Repeatable for multiple overlays. Passed to the template as-is (see [Overlay Images](#overlay-images)). A remote overlay that fails to load stops the run with an error |
 | `--headshot` | No | — | Guest headshot image (local path or HTTP(S) URL) placed in the template's headshot slot. A remote headshot that fails to load stops the run with an error |
 | `--headshot-filter` | No | `blue-mono` | Filter applied to the headshot. Built-in: `blue-mono`, `mono`, `none`. Or supply a raw CSS `filter` string |
@@ -120,21 +120,24 @@ imgforge generate \
 ### Random backgrounds
 
 `--bg random` downloads a random image before rendering, trying [picsum.photos](https://picsum.photos) and then a
-solid-color placeholder from [placehold.co](https://placehold.co). If `UNSPLASH_ACCESS_KEY` is set, Unsplash is tried
-first (see [Unsplash](#unsplash-optional-api-key)).
+solid-color placeholder from [placehold.co](https://placehold.co). If an API key is set for
+Unsplash, Pexels, or Pixabay, those are tried first (see [Unsplash](#unsplash-optional-api-key) and
+[Pexels and Pixabay](#pexels-and-pixabay-optional-api-keys)).
 
 To use one provider only, use `random:<provider>`. There's no fallback, so if that provider fails, the command fails
 with an error naming it (use plain `random` to try each provider in turn):
 
 | `--bg` value | Image |
 |---|---|
-| `random` | Default: [picsum.photos](https://picsum.photos), falling back to [placehold.co](https://placehold.co) (Unsplash first when `UNSPLASH_ACCESS_KEY` is set) |
+| `random` | Default: [picsum.photos](https://picsum.photos), falling back to [placehold.co](https://placehold.co) (Unsplash, Pexels, and Pixabay first when their keys are set) |
 | `random:picsum` | A random photo from picsum.photos |
 | `random:loremflickr` | A random Flickr photo from [loremflickr.com](https://loremflickr.com) matching `abstract` (currently unreliable, see below) |
 | `random:loremflickr:<keyword>` | A loremflickr.com photo matching a keyword, or several separated by commas (e.g. `technology` or `city,night`) |
 | `random:placeholder` | A solid dark-slate (`#1e293b`) image from placehold.co |
 | `random:placeholder:<color>` | A solid image in a 6-digit hex color (e.g. `0f172a` or `#0F172A`) |
 | `random:unsplash` | A random photo from the [Unsplash API](https://unsplash.com/developers) (needs `UNSPLASH_ACCESS_KEY`, see below) |
+| `random:pexels` | A curated photo from the [Pexels API](https://www.pexels.com/api/) (needs `PEXELS_API_KEY`, see below) |
+| `random:pixabay` | A popular photo from the [Pixabay API](https://pixabay.com/api/docs/) (needs `PIXABAY_API_KEY`, see below) |
 
 ```bash
 imgforge generate --template blog --title "My Post" --bg random:placeholder:0f172a --format blog
@@ -164,6 +167,31 @@ When the image comes from Unsplash, ImgForge prints a credit line to stderr, suc
 photographer and Unsplash wherever you use the photo. If the key is rejected (HTTP 401) or the hourly rate limit is
 reached (HTTP 403 or 429), plain `random` moves on to the next provider with a warning. The key is only sent to
 `api.unsplash.com` and is never printed.
+
+#### Pexels and Pixabay (optional API keys)
+
+[Pexels](https://www.pexels.com/api/) and [Pixabay](https://pixabay.com/api/docs/) work the same way as Unsplash.
+Set `PEXELS_API_KEY` and/or `PIXABAY_API_KEY` to a free API key to turn each one on. Plain `random` tries every
+provider whose key is set, in this order: Unsplash, Pexels, Pixabay, then picsum.photos, then placehold.co.
+`random:pexels` and `random:pixabay` use only that provider, and fail right away if its key isn't set.
+
+```bash
+export PEXELS_API_KEY=your-pexels-key     # PowerShell: $env:PEXELS_API_KEY = "your-pexels-key"
+export PIXABAY_API_KEY=your-pixabay-key   # PowerShell: $env:PIXABAY_API_KEY = "your-pixabay-key"
+imgforge generate --template blog --title "My Post" --bg random:pexels --format blog
+```
+
+- **Pexels** picks a photo from its curated collection, cropped by Pexels to the requested size, and ImgForge prints a
+  credit line to stderr such as `Photo by Jane Doe (https://www.pexels.com/@janedoe) on Pexels (https://www.pexels.com)`,
+  as the [Pexels guidelines](https://www.pexels.com/api/documentation/#guidelines) ask. The free tier allows 200
+  requests per hour.
+- **Pixabay** picks a popular photo in the right orientation (up to 1280 pixels wide, scaled to cover the template)
+  and prints a credit line such as `Photo by janedoe on Pixabay (https://pixabay.com/photos/...)`. Pixabay doesn't
+  require credit but appreciates it. ImgForge downloads the image rather than linking to it, as Pixabay's terms
+  require. Pixabay takes the key in the request URL; ImgForge only sends it to `pixabay.com/api/` and never prints it.
+
+If a key is rejected or a rate limit is reached, plain `random` moves on to the next provider with a warning. Keys are
+never printed.
 
 ### Format presets
 

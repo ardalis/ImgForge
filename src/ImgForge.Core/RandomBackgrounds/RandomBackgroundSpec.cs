@@ -16,21 +16,33 @@ internal sealed record RandomBackgroundSpec
     public const string LoremFlickr = "loremflickr";
     public const string Placeholder = "placeholder";
     public const string Unsplash = "unsplash";
+    public const string Pexels = "pexels";
+    public const string Pixabay = "pixabay";
 
     /// <summary>The provider names accepted after <c>random:</c>, in the order shown to users.</summary>
-    public static IReadOnlyList<string> ProviderNames { get; } = [Picsum, LoremFlickr, Placeholder, Unsplash];
+    public static IReadOnlyList<string> ProviderNames { get; } = [Picsum, LoremFlickr, Placeholder, Unsplash, Pexels, Pixabay];
+
+    /// <summary>Providers that need an API key: the environment variable holding it, and how to describe it.</summary>
+    private static readonly Dictionary<string, KeyedProvider> KeyedProviders = new()
+    {
+        [Unsplash] = new(UnsplashProvider.AccessKeyVariable, "Unsplash", "access key", "https://unsplash.com/developers"),
+        [Pexels] = new(PexelsProvider.ApiKeyVariable, "Pexels", "API key", "https://www.pexels.com/api/"),
+        [Pixabay] = new(PixabayProvider.ApiKeyVariable, "Pixabay", "API key", "https://pixabay.com/api/docs/"),
+    };
+
+    private sealed record KeyedProvider(string Variable, string Service, string KeyKind, string SignUpUrl);
 
     /// <summary>The default provider order (<c>--bg random</c>).</summary>
     public static RandomBackgroundSpec Default { get; } = new(null, null);
 
-    /// <summary>The Unsplash access key, for <c>random:unsplash</c> only. Private so it never appears in <c>ToString</c>.</summary>
-    private readonly string? _unsplashAccessKey;
+    /// <summary>The API key for a provider that needs one. Private so it never appears in <c>ToString</c>.</summary>
+    private readonly string? _apiKey;
 
-    private RandomBackgroundSpec(string? providerName, string? option, string? unsplashAccessKey = null)
+    private RandomBackgroundSpec(string? providerName, string? option, string? apiKey = null)
     {
         ProviderName = providerName;
         Option = option;
-        _unsplashAccessKey = unsplashAccessKey;
+        _apiKey = apiKey;
     }
 
     /// <summary>The selected provider (one of <see cref="ProviderNames"/>), or <c>null</c> for the default order.</summary>
@@ -62,16 +74,18 @@ internal sealed record RandomBackgroundSpec
 
     /// <summary>Parses a <c>--bg</c> value for which <see cref="IsRandom"/> is true.</summary>
     /// <exception cref="ArgumentException">
-    /// The value isn't a random background, names an unknown provider, has a missing or invalid option, or selects
-    /// Unsplash while <c>UNSPLASH_ACCESS_KEY</c> isn't set.
+    /// The value isn't a random background, names an unknown provider, has a missing or invalid option, or selects an
+    /// API provider (Unsplash, Pexels, Pixabay) whose key environment variable isn't set.
     /// </exception>
     public static RandomBackgroundSpec Parse(string background) =>
-        Parse(background, UnsplashProvider.AccessKeyFromEnvironment);
+        Parse(background, ApiProviderHelpers.KeyFromEnvironment);
 
     /// <inheritdoc cref="Parse(string)"/>
     /// <param name="background">The <c>--bg</c> value.</param>
-    /// <param name="unsplashAccessKey">Gets the Unsplash access key (or <c>null</c>); called only for <c>random:unsplash</c>.</param>
-    internal static RandomBackgroundSpec Parse(string background, Func<string?> unsplashAccessKey)
+    /// <param name="apiKey">
+    /// Gets the key from the named environment variable (or <c>null</c>); called only for a provider that needs a key.
+    /// </param>
+    internal static RandomBackgroundSpec Parse(string background, Func<string, string?> apiKey)
     {
         if (!IsRandom(background))
             throw new ArgumentException($"\"{background}\" is not a random background (expected \"{Keyword}\" or \"{Keyword}:<provider>\").", nameof(background));
@@ -86,14 +100,14 @@ internal sealed record RandomBackgroundSpec
         if (!ProviderNames.Contains(name))
             throw Invalid(background, $"unknown provider \"{parts[1].Trim()}\". {ValidProvidersText}");
 
-        if (name == Unsplash)
+        if (KeyedProviders.TryGetValue(name, out var keyed))
         {
             if (parts.Length == 3)
                 throw Invalid(background, $"{name} doesn't take an option. Use \"{Keyword}:{name}\".");
-            var key = unsplashAccessKey();
+            var key = apiKey(keyed.Variable);
             if (string.IsNullOrWhiteSpace(key))
-                throw Invalid(background, $"Unsplash needs an access key. Set the {UnsplashProvider.AccessKeyVariable} " +
-                    "environment variable to your Unsplash access key (free at https://unsplash.com/developers).");
+                throw Invalid(background, $"{keyed.Service} needs an {keyed.KeyKind}. Set the {keyed.Variable} " +
+                    $"environment variable to your {keyed.Service} {keyed.KeyKind} (free at {keyed.SignUpUrl}).");
             return new RandomBackgroundSpec(name, null, key.Trim());
         }
 
@@ -131,7 +145,9 @@ internal sealed record RandomBackgroundSpec
             Picsum => new PicsumProvider(client),
             LoremFlickr => Option is null ? new LoremFlickrProvider(client) : new LoremFlickrProvider(client) { Keyword = Option },
             Placeholder => Option is null ? new PlaceholderProvider(client) : new PlaceholderProvider(client) { Color = Option },
-            Unsplash => new UnsplashProvider(client, _unsplashAccessKey!),
+            Unsplash => new UnsplashProvider(client, _apiKey!),
+            Pexels => new PexelsProvider(client, _apiKey!),
+            Pixabay => new PixabayProvider(client, _apiKey!),
             _ => throw new InvalidOperationException($"Unhandled provider \"{ProviderName}\".")
         };
     }
