@@ -254,4 +254,48 @@ public class TemplateRendererTests
         var result = _renderer.Render(opts);
         Assert.DoesNotContain("<base href=", result);
     }
+
+    [Theory]
+    [InlineData("random")]
+    [InlineData(" Random ")]
+    public void Render_UnresolvedRandomBackground_Throws(string bg)
+    {
+        var opts = new GenerateOptions(
+            Template: "blog",
+            Title: "Hello",
+            Subtitle: null,
+            Background: bg,
+            Overlays: [],
+            Out: "out.png");
+
+        var ex = Assert.Throws<InvalidOperationException>(() => _renderer.Render(opts));
+
+        Assert.Contains("ImageGenerator.GenerateAsync", ex.Message);
+    }
+
+    [Fact]
+    public void Render_LocalBackgroundFile_BecomesFileUri()
+    {
+        var bgFile = Path.Combine(Path.GetTempPath(), "imgforge-bg-test.jpg");
+        var templateFile = Path.GetTempFileName() + ".html";
+        try
+        {
+            File.WriteAllText(templateFile, "<div style=\"background-image:url('{{ bg }}')\"></div>");
+            var opts = new GenerateOptions(
+                Template: templateFile,
+                Title: "Hello",
+                Subtitle: null,
+                Background: bgFile,
+                Overlays: [],
+                Out: "out.png");
+
+            var html = _renderer.Render(opts);
+
+            Assert.Contains("file:///" + bgFile.Replace('\\', '/'), html);
+        }
+        finally
+        {
+            File.Delete(templateFile);
+        }
+    }
 }

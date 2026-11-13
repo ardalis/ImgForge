@@ -8,7 +8,6 @@ internal sealed record FailedRequest(string Url, string Reason);
 /// <summary>Where a remote resource referenced by the rendered page came from.</summary>
 internal enum ResourceSource
 {
-    RandomBackground,
     Background,
     Headshot,
     Overlay,
@@ -27,8 +26,6 @@ internal sealed record ResourceLoadFailure(ResourceSource Source, string Url, st
 /// </summary>
 internal static class ResourceLoadFailures
 {
-    private const string RandomBackgroundHost = "picsum.photos";
-
     /// <summary>
     /// Maps failed HTTP(S) requests to the option that referenced them. Requests that don't match a
     /// user-supplied URL are attributed to the template. Non-HTTP(S) requests are ignored.
@@ -71,7 +68,7 @@ internal static class ResourceLoadFailures
         lines.Add("  - Check your network connection and the URL, then try again later.");
 
         var sources = failures.Select(f => f.Source).ToHashSet();
-        if (sources.Contains(ResourceSource.RandomBackground) || sources.Contains(ResourceSource.Background))
+        if (sources.Contains(ResourceSource.Background))
             lines.Add("  - Pass a different background with --bg (a local image file or another URL), " +
                       "or omit --bg to use the template's built-in background design.");
         if (sources.Contains(ResourceSource.Headshot))
@@ -97,10 +94,8 @@ internal static class ResourceLoadFailures
                 urls.TryAdd(MatchKey(uri), source);
         }
 
-        if (TemplateRenderer.IsRandomBackground(opts.Background))
-            Add(TemplateRenderer.RandomBackgroundUrl(opts.Width, opts.Height), ResourceSource.RandomBackground);
-        else
-            Add(opts.Background, ResourceSource.Background);
+        // "--bg random" is downloaded before rendering (see RandomBackgroundResolver), so it never appears here.
+        Add(opts.Background, ResourceSource.Background);
 
         Add(opts.Headshot?.Src, ResourceSource.Headshot);
 
@@ -122,7 +117,6 @@ internal static class ResourceLoadFailures
 
     private static string Describe(ResourceLoadFailure f) => f.Source switch
     {
-        ResourceSource.RandomBackground => $"a random background image from {RandomBackgroundHost} (used by --bg random)",
         ResourceSource.Background => $"the --bg background image from {f.Host}",
         ResourceSource.Headshot => $"the --headshot image from {f.Host}",
         ResourceSource.Overlay => $"the --overlay image from {f.Host}",

@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Globalization;
 using System.Runtime.InteropServices;
+using ImgForge.Core.RandomBackgrounds;
 using PuppeteerSharp;
 using PuppeteerSharp.BrowserData;
 
@@ -18,7 +19,32 @@ public class ImageGenerator(TemplateRenderer renderer)
     /// </summary>
     internal TextWriter Warnings { get; set; } = Console.Error;
 
+    /// <summary>Downloads the image for <c>--bg random</c> before rendering.</summary>
+    internal RandomBackgroundResolver RandomBackgrounds { get; set; } = new();
+
     public async Task<string> GenerateAsync(GenerateOptions opts)
+    {
+        // Download a random background up front (with a short timeout) and hand the template a local file,
+        // so a slow or failing image service fails fast instead of using up the page-load timeout.
+        string? randomBackgroundFile = null;
+        try
+        {
+            if (TemplateRenderer.IsRandomBackground(opts.Background))
+            {
+                randomBackgroundFile = await RandomBackgrounds.ResolveToFileAsync(opts.Width, opts.Height);
+                opts = opts with { Background = randomBackgroundFile };
+            }
+
+            return await GenerateResolvedAsync(opts);
+        }
+        finally
+        {
+            if (randomBackgroundFile is not null && File.Exists(randomBackgroundFile))
+                File.Delete(randomBackgroundFile);
+        }
+    }
+
+    private async Task<string> GenerateResolvedAsync(GenerateOptions opts)
     {
         var html = renderer.Render(opts);
 
@@ -114,7 +140,7 @@ public class ImageGenerator(TemplateRenderer renderer)
 
     /// <summary>
     /// Returns the distinct hosts of in-flight HTTP(S) requests. For redirected requests the host of the
-    /// original URL is used (e.g. picsum.photos rather than the CDN it redirects to).
+    /// original URL is used rather than the CDN it redirects to.
     /// </summary>
     private static List<string> GetPendingHosts(IEnumerable<IRequest> requests) =>
         requests
@@ -134,7 +160,10 @@ public class ImageGenerator(TemplateRenderer renderer)
     /// Builds a user-facing explanation of a page-load timeout, naming the remote site(s) responsible
     /// and suggesting alternatives.
     /// </summary>
-    /// <param name="opts">The generation options (used to recognise the background source).</param>
+    /// <param name="opts">
+    /// The generation options (used to recognise the background source). <c>--bg random</c> has already been
+    /// resolved to a local file by the time the page loads, so it is never the cause of a timeout.
+    /// </param>
     /// <param name="timeout">The load timeout that elapsed.</param>
     /// <param name="pendingHosts">Hosts of requests still in flight when the timeout elapsed, if known.</param>
     internal static string BuildTimeoutMessage(
@@ -143,9 +172,7 @@ public class ImageGenerator(TemplateRenderer renderer)
         var secondsValue = timeout.TotalSeconds.ToString("0.##", CultureInfo.InvariantCulture);
         var seconds = $"{secondsValue} second{(timeout.TotalSeconds == 1 ? "" : "s")}";
 
-        var bg = opts.Background?.Trim();
-        var isRandomBg = TemplateRenderer.IsRandomBackground(bg);
-        var bgHost = isRandomBg ? RandomBackgroundHost : GetHttpHost(bg);
+        var bgHost = GetHttpHost(opts.Background?.Trim());
 
         IReadOnlyList<string> hosts = pendingHosts is { Count: > 0 }
             ? pendingHosts.Distinct(StringComparer.OrdinalIgnoreCase).ToList()
@@ -163,9 +190,7 @@ public class ImageGenerator(TemplateRenderer renderer)
             && hosts.All(h => string.Equals(h, bgHost, StringComparison.OrdinalIgnoreCase));
 
         var what = onlyBackground
-            ? isRandomBg
-                ? $"a random background image from {RandomBackgroundHost} (used by --bg random)"
-                : $"the background image from {bgHost}"
+            ? $"the background image from {bgHost}"
             : $"remote content from {string.Join(", ", hosts)}";
 
         var lines = new List<string>
@@ -190,8 +215,6 @@ public class ImageGenerator(TemplateRenderer renderer)
 
         return string.Join(Environment.NewLine, lines);
     }
-
-    private const string RandomBackgroundHost = "picsum.photos";
 
     // Serializes the first-run Chromium download. Concurrent GenerateAsync calls would otherwise all see
     // "no browser installed" and download to the same zip file at once, failing with an IOException.

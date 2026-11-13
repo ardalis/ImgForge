@@ -12,20 +12,23 @@ public class TemplateRenderer
             ["none"] = "none"
         };
 
-    /// <summary>The URL used for <c>--bg random</c>: a random picsum.photos image at the output size.</summary>
-    internal static string RandomBackgroundUrl(int width, int height) =>
-        $"https://picsum.photos/{width}/{height}";
-
-    /// <summary>True when the background option asks for a random picsum.photos image (<c>--bg random</c>).</summary>
+    /// <summary>True when the background option asks for a random image (<c>--bg random</c>).</summary>
     internal static bool IsRandomBackground(string? background) =>
         string.Equals(background?.Trim(), "random", StringComparison.OrdinalIgnoreCase);
 
+    /// <exception cref="InvalidOperationException">
+    /// <paramref name="opts"/> still has <c>Background = "random"</c>. <see cref="ImageGenerator"/> downloads the
+    /// random image and passes its local path instead.
+    /// </exception>
     public string Render(GenerateOptions opts)
     {
+        if (IsRandomBackground(opts.Background))
+            throw new InvalidOperationException(
+                "A \"random\" background must be resolved to an image file before rendering; " +
+                "ImageGenerator.GenerateAsync does this automatically.");
+
         var (templateSource, templateDir) = LoadTemplateSource(opts.Template);
-        var bg = IsRandomBackground(opts.Background)
-            ? RandomBackgroundUrl(opts.Width, opts.Height)
-            : ResolveLocalPath(opts.Background);
+        var bg = ResolveLocalPath(opts.Background);
 
         var template = Template.ParseLiquid(templateSource);
 

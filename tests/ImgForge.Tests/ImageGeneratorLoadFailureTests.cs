@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using ImgForge.Core;
+using ImgForge.Core.RandomBackgrounds;
 
 namespace ImgForge.Tests;
 
@@ -127,6 +128,57 @@ public class ImageGeneratorLoadFailureTests : IDisposable
         Assert.True(File.Exists(outPath));
         Assert.Equal(string.Empty, warnings.ToString());
     }
+
+    [Fact]
+    public async Task GenerateAsync_RandomBackground_RendersDownloadedImageAndDeletesTempFile()
+    {
+        var provider = new StubRandomBackgroundProvider((_, _, _) =>
+            Task.FromResult(new RandomBackgroundImage(Convert.FromBase64String(RedPixelPng), "image/png")));
+        // If the downloaded background fails to load, onerror requests a closed port, which shows up as a
+        // template-resource warning. So "no warnings" proves the local file was rendered.
+        var closedPort = GetClosedPort();
+        var (opts, outPath) = CreateOptions(
+            "<html><body style='margin:0'><img src='{{ bg }}' " +
+            $"onerror=\"var i = new Image(); i.src = 'http://127.0.0.1:{closedPort}/bg-failed.png'; document.body.appendChild(i)\">" +
+            "</body></html>",
+            background: "random");
+        var warnings = new StringWriter();
+        var generator = NewGenerator();
+        generator.Warnings = warnings;
+        generator.RandomBackgrounds = new RandomBackgroundResolver(provider);
+        var tempFilesBefore = RandomBackgroundTempFiles();
+
+        await generator.GenerateAsync(opts);
+
+        Assert.Equal(1, provider.Calls);
+        Assert.True(File.Exists(outPath));
+        Assert.Equal(string.Empty, warnings.ToString());
+        Assert.Equal(tempFilesBefore, RandomBackgroundTempFiles());
+    }
+
+    [Fact]
+    public async Task GenerateAsync_RandomBackgroundProviderFails_ThrowsBeforeLoadingPageAndWritesNoImage()
+    {
+        var provider = new StubRandomBackgroundProvider((_, _, _) =>
+            throw new RandomBackgroundProviderException("the site returned HTTP 522"));
+        var (opts, outPath) = CreateOptions("<html><body><img src='{{ bg }}'></body></html>", background: "random");
+        var generator = NewGenerator();
+        generator.RandomBackgrounds = new RandomBackgroundResolver(provider);
+
+        var ex = await Assert.ThrowsAsync<ImageLoadException>(() => generator.GenerateAsync(opts));
+
+        Assert.StartsWith(
+            "Could not load a random background image from stub.example (used by --bg random): the site returned HTTP 522.",
+            ex.Message);
+        Assert.False(File.Exists(outPath), "No output should be written when the random background fails.");
+    }
+
+    /// <summary>A 1×1 red PNG.</summary>
+    private const string RedPixelPng =
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==";
+
+    private static HashSet<string> RandomBackgroundTempFiles() =>
+        Directory.GetFiles(Path.GetTempPath(), "imgforge-bg-*").ToHashSet(StringComparer.OrdinalIgnoreCase);
 
     private static ImageGenerator NewGenerator() =>
         new(new TemplateRenderer()) { LoadTimeout = TimeSpan.FromSeconds(15) };
