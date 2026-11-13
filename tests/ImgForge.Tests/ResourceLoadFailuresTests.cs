@@ -21,15 +21,15 @@ public class ResourceLoadFailuresTests
     // ---- Classify ----
 
     [Fact]
-    public void Classify_RandomBackgroundUrl_IsRandomBackground()
+    public void Classify_UrlBackground_IsRequestedByUser()
     {
         var failures = ResourceLoadFailures.Classify(
-            Options("random"),
-            [new FailedRequest("https://picsum.photos/1200/630", "net::ERR_NAME_NOT_RESOLVED")]);
+            Options("https://images.example.com/cover.jpg"),
+            [new FailedRequest("https://images.example.com/cover.jpg", "net::ERR_NAME_NOT_RESOLVED")]);
 
         var f = Assert.Single(failures);
-        Assert.Equal(ResourceSource.RandomBackground, f.Source);
-        Assert.Equal("picsum.photos", f.Host);
+        Assert.Equal(ResourceSource.Background, f.Source);
+        Assert.Equal("images.example.com", f.Host);
         Assert.True(f.IsRequestedByUser);
     }
 
@@ -63,16 +63,16 @@ public class ResourceLoadFailuresTests
         Assert.Equal(ResourceSource.Background, Assert.Single(failures).Source);
     }
 
-    [Theory]
-    [InlineData(" random ")]
-    [InlineData("Random")]
-    public void Classify_RandomBackgroundVariants_AreRecognized(string bg)
+    [Fact]
+    public void Classify_LocalBackgroundFile_DoesNotClaimRemoteRequests()
     {
+        // "--bg random" reaches the page as a downloaded local file, so a failing picsum.photos request
+        // (e.g. one hard-coded in a template) is the template's, not the background's.
         var failures = ResourceLoadFailures.Classify(
-            Options(bg),
+            Options(Path.Combine(Path.GetTempPath(), "imgforge-bg-test.jpg")),
             [new FailedRequest("https://picsum.photos/1200/630", "net::ERR_NAME_NOT_RESOLVED")]);
 
-        Assert.Equal(ResourceSource.RandomBackground, Assert.Single(failures).Source);
+        Assert.Equal(ResourceSource.Template, Assert.Single(failures).Source);
     }
 
     [Fact]
@@ -92,7 +92,7 @@ public class ResourceLoadFailuresTests
     public void Classify_UnmatchedUrl_IsTemplateResource()
     {
         var failures = ResourceLoadFailures.Classify(
-            Options("random"),
+            Options(),
             [new FailedRequest("https://fonts.example.com/font.woff2", "net::ERR_NAME_NOT_RESOLVED")]);
 
         var f = Assert.Single(failures);
@@ -122,14 +122,13 @@ public class ResourceLoadFailuresTests
         new(source, $"https://{host}/img.jpg", host, reason);
 
     [Fact]
-    public void ErrorMessage_RandomBackground_NamesPicsumAndSuggestsAlternatives()
+    public void ErrorMessage_Background_NamesHostAndSuggestsAlternatives()
     {
-        var message = ResourceLoadFailures.BuildErrorMessage(
-            [Failure(ResourceSource.RandomBackground, host: "picsum.photos")]);
+        var message = ResourceLoadFailures.BuildErrorMessage([Failure(ResourceSource.Background)]);
 
         var lines = message.Split(Environment.NewLine);
         Assert.Equal(
-            "Could not load a random background image from picsum.photos (used by --bg random): " +
+            "Could not load the --bg background image from images.example.com: " +
             "the site could not be reached (net::ERR_NAME_NOT_RESOLVED).",
             lines[0]);
         Assert.Contains("try again later", message);

@@ -23,7 +23,7 @@ imgforge generate \
 | `--template` | No | `.tools/imgforge/template.html` | Built-in template name (`blog`, `youtube`, `blog-subtitle`) or path to a `.html` file or a directory containing `template.html`. If omitted, a default template is looked up (see [Default Template Path](templates/#default-template-path)); it's an error if none is found |
 | `--title` | Yes | — | Main heading text injected into the template |
 | `--subtitle` | No | — | Optional subtitle rendered below the title in templates that support it (e.g. `blog-subtitle`) |
-| `--bg` | No | — | Background image: local file path, HTTP(S) URL, or `random` (fetches a random image from [picsum.photos](https://picsum.photos)) |
+| `--bg` | No | — | Background image: local file path, HTTP(S) URL, or `random` (downloads a random image from [picsum.photos](https://picsum.photos) before rendering) |
 | `--overlay` | No | — | Overlay image source. Repeatable for multiple overlays. Passed to the template as-is (see [Overlay Images](#overlay-images)) |
 | `--headshot` | No | — | Guest headshot image (local path or HTTP(S) URL) placed in the template's headshot slot |
 | `--headshot-filter` | No | `blue-mono` | Filter applied to the headshot. Built-in: `blue-mono`, `mono`, `none`. Or supply a raw CSS `filter` string |
@@ -53,15 +53,16 @@ imgforge generate --template blog --title "My Post" \
 
 ### Random Image
 
-Use `random` to fetch a random image from [picsum.photos](https://picsum.photos):
+Use `random` to download a random image from [picsum.photos](https://picsum.photos):
 
 ```bash
 imgforge generate --template blog --title "My Post" --bg random --format blog
 ```
 
-This requires network access to picsum.photos. ImgForge waits up to 30 seconds for the page, including all
-remote images, to load. If picsum.photos (or any other remote background URL) is unreachable, slow, or returns
-an HTTP error, the command fails with an error that names the site, and no image is written. Try again later,
+This requires network access to picsum.photos. ImgForge downloads the image before rendering the template and
+gives the site 5 seconds to start responding (and 30 seconds to finish the download). If picsum.photos is unreachable, slow, or returns an HTTP error (or something
+that isn't an image), the command fails with an error that names the site, and no image is written. Other remote
+background URLs are loaded by the page, which has up to 30 seconds to finish loading, and fail the same way. Try again later,
 use a local image or another URL with `--bg`, or omit `--bg` to use the template's built-in background design.
 
 ### When Remote Images Fail to Load

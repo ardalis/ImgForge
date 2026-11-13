@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using ImgForge.Core;
+using ImgForge.Core.RandomBackgrounds;
 
 namespace ImgForge.Tests;
 
@@ -9,6 +10,7 @@ namespace ImgForge.Tests;
 public class ImageGeneratorLoadFailureTests : IDisposable
 {
     private readonly List<string> _tempFiles = [];
+    private readonly List<string> _tempDirs = [];
 
     [Fact]
     public async Task GenerateAsync_BackgroundConnectionRefused_ThrowsAndWritesNoImage()
@@ -128,6 +130,95 @@ public class ImageGeneratorLoadFailureTests : IDisposable
         Assert.Equal(string.Empty, warnings.ToString());
     }
 
+    [Fact]
+    public async Task GenerateAsync_RandomBackground_RendersDownloadedImageAndDeletesTempFile()
+    {
+        var provider = new StubRandomBackgroundProvider((_, _, _) =>
+            Task.FromResult(new RandomBackgroundImage(Convert.FromBase64String(RedPixelPng), "image/png")));
+        // If the downloaded background fails to load, onerror requests a closed port, which shows up as a
+        // template-resource warning. So "no warnings" proves the local file was rendered.
+        var closedPort = GetClosedPort();
+        var (opts, outPath) = CreateOptions(
+            "<html><body style='margin:0'><img src='{{ bg }}' " +
+            $"onerror=\"var i = new Image(); i.src = 'http://127.0.0.1:{closedPort}/bg-failed.png'; document.body.appendChild(i)\">" +
+            "</body></html>",
+            background: "random");
+        var warnings = new StringWriter();
+        var generator = NewGenerator();
+        generator.Warnings = warnings;
+        // A folder name with characters that break naive file URIs in url('...') / src='...'.
+        var tempDir = NewTempDirectory("O'Brien #1 50%");
+        generator.RandomBackgrounds = new RandomBackgroundResolver(provider) { TempDirectory = tempDir };
+
+        await generator.GenerateAsync(opts);
+
+        Assert.Equal(1, provider.Calls);
+        Assert.True(File.Exists(outPath));
+        Assert.Equal(string.Empty, warnings.ToString());
+        Assert.Empty(Directory.GetFiles(tempDir));
+    }
+
+    [Fact]
+    public async Task GenerateAsync_RandomBackgroundProviderFails_ThrowsAndWritesNoImage()
+    {
+        var provider = new StubRandomBackgroundProvider((_, _, _) =>
+            throw new RandomBackgroundProviderException("the site returned HTTP 522"));
+        var (opts, outPath) = CreateOptions("<html><body><img src='{{ bg }}'></body></html>", background: "random");
+        var generator = NewGenerator();
+        generator.RandomBackgrounds = new RandomBackgroundResolver(provider);
+
+        var ex = await Assert.ThrowsAsync<ImageLoadException>(() => generator.GenerateAsync(opts));
+
+        Assert.StartsWith(
+            "Could not load a random background image from stub.example (used by --bg random): the site returned HTTP 522.",
+            ex.Message);
+        Assert.False(File.Exists(outPath), "No output should be written when the random background fails.");
+    }
+
+    [Fact]
+    public async Task GenerateAsync_RandomBackgroundThenRenderFails_DeletesDownloadedImage()
+    {
+        var provider = new StubRandomBackgroundProvider((_, _, _) =>
+            Task.FromResult(new RandomBackgroundImage(Convert.FromBase64String(RedPixelPng), "image/png")));
+        var (opts, _) = CreateOptions("<html>{{ bg | no_such_filter }}</html>", background: "random");
+        var tempDir = NewTempDirectory("bg");
+        var generator = NewGenerator();
+        generator.RandomBackgrounds = new RandomBackgroundResolver(provider) { TempDirectory = tempDir };
+
+        await Assert.ThrowsAnyAsync<Exception>(() => generator.GenerateAsync(opts));
+
+        Assert.Equal(1, provider.Calls);
+        Assert.Empty(Directory.GetFiles(tempDir));
+    }
+
+    [Fact]
+    public async Task GenerateAsync_RandomBackgroundWithMissingTemplate_FailsWithoutDownloading()
+    {
+        var provider = new StubRandomBackgroundProvider((_, _, _) =>
+            Task.FromResult(new RandomBackgroundImage(Convert.FromBase64String(RedPixelPng), "image/png")));
+        var generator = NewGenerator();
+        generator.RandomBackgrounds = new RandomBackgroundResolver(provider);
+        var opts = new GenerateOptions(
+            Template: Path.Combine(Path.GetTempPath(), $"missing-{Guid.NewGuid():N}.html"),
+            Title: "Test", Subtitle: null, Background: "random", Overlays: [], Out: "unused.png");
+
+        await Assert.ThrowsAsync<FileNotFoundException>(() => generator.GenerateAsync(opts));
+
+        Assert.Equal(0, provider.Calls);
+    }
+
+    /// <summary>A 1×1 red PNG.</summary>
+    private const string RedPixelPng =
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==";
+
+    private string NewTempDirectory(string name)
+    {
+        var dir = Path.Combine(Directory.CreateTempSubdirectory("imgforge-test-").FullName, name);
+        Directory.CreateDirectory(dir);
+        _tempDirs.Add(Path.GetDirectoryName(dir)!);
+        return dir;
+    }
+
     private static ImageGenerator NewGenerator() =>
         new(new TemplateRenderer()) { LoadTimeout = TimeSpan.FromSeconds(15) };
 
@@ -166,6 +257,10 @@ public class ImageGeneratorLoadFailureTests : IDisposable
         foreach (var file in _tempFiles)
         {
             try { File.Delete(file); } catch { /* best-effort cleanup */ }
+        }
+        foreach (var dir in _tempDirs)
+        {
+            try { Directory.Delete(dir, recursive: true); } catch { /* best-effort cleanup */ }
         }
         GC.SuppressFinalize(this);
     }

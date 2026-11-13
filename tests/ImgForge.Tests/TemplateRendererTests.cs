@@ -254,4 +254,53 @@ public class TemplateRendererTests
         var result = _renderer.Render(opts);
         Assert.DoesNotContain("<base href=", result);
     }
+
+    [Theory]
+    [InlineData("random")]
+    [InlineData(" Random ")]
+    public void Render_UnresolvedRandomBackground_Throws(string bg)
+    {
+        var opts = new GenerateOptions(
+            Template: "blog",
+            Title: "Hello",
+            Subtitle: null,
+            Background: bg,
+            Overlays: [],
+            Out: "out.png");
+
+        var ex = Assert.Throws<InvalidOperationException>(() => _renderer.Render(opts));
+
+        Assert.Contains("ImageGenerator.GenerateAsync", ex.Message);
+    }
+
+    [Fact]
+    public void Render_LocalBackgroundFile_BecomesEscapedFileUri()
+    {
+        var bgFile = Path.Combine(Path.GetTempPath(), "O'Brien #1 50%", "bg.jpg");
+        var templateFile = Path.Combine(Path.GetTempPath(), $"imgforge-test-{Guid.NewGuid():N}.html");
+        try
+        {
+            File.WriteAllText(templateFile, "<div style=\"background-image:url('{{ bg }}')\"></div>");
+            var opts = new GenerateOptions(
+                Template: templateFile,
+                Title: "Hello",
+                Subtitle: null,
+                Background: bgFile,
+                Overlays: [],
+                Out: "out.png");
+
+            var html = _renderer.Render(opts);
+
+            var uri = html[(html.IndexOf("url('", StringComparison.Ordinal) + 5)..html.IndexOf("')", StringComparison.Ordinal)];
+            Assert.StartsWith("file:///", uri);
+            Assert.DoesNotContain("'", uri);
+            Assert.DoesNotContain(" ", uri);
+            Assert.DoesNotContain("#", uri);
+            Assert.Equal(Path.GetFullPath(bgFile), new Uri(uri).LocalPath);
+        }
+        finally
+        {
+            File.Delete(templateFile);
+        }
+    }
 }
