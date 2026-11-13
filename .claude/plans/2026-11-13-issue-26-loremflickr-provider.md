@@ -50,14 +50,28 @@ wire them to `--bg random:loremflickr[:keyword]`.
 
 ## Phase 4 — Independent review
 
-- [ ] A separate agent with fresh context reviews the full diff against #26: correctness, missed requirements, test
+- [x] A separate agent with fresh context reviews the full diff against #26: correctness, missed requirements, test
       gaps, regressions, security (URL injection via keyword), performance, accessibility
-- [ ] Address all significant findings; record skipped ones with reasons below
+- [x] Address all significant findings; record skipped ones with reasons below
 
 ## Phase 5 — Final verification
 
-- [ ] `dotnet BuildTestFormat.cs` passes (build, all tests, `dotnet format --verify-no-changes`)
+- [x] `dotnet BuildTestFormat.cs` passes (build, all tests, `dotnet format --verify-no-changes`)
 
 ## Review notes
 
-_(pending)_
+A separate general-purpose agent with fresh context reviewed `git diff origin/main...HEAD`. It found no
+significant issues. It confirmed that the keyword pattern can't change the host, path or query, that the provider
+matches `PicsumProvider`'s conventions, and that leaving LoremFlickr out of the default order is reasonable. It
+re-checked loremflickr.com during the review and still got HTTP 500. It raised four low-severity items, and all
+four were addressed:
+
+1. **Exception parameter name was `value`:** `ArgumentException` adds `(Parameter 'value')` to its message, which
+   would confuse CLI users once #29 shows the message. The exceptions now use `nameof(Keyword)` / `nameof(Lock)`,
+   and the tests check the full message and `ParamName` exactly.
+2. **No limit on keyword length:** a keyword is now limited to `MaxKeywordLength` (100) characters. There are
+   tests for exactly 100 and for 101.
+3. **Undisposed `HttpClient`s in tests:** the tests that only build URLs or check settings now share one static
+   client. Its handler throws if a request is ever sent.
+4. **Availability result recorded only here:** posted on #26 and #29 that LoremFlickr returned HTTP 500 on
+   2026-11-13 and should be re-checked before it's added to the default order.

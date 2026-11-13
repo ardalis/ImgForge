@@ -8,6 +8,10 @@ public class LoremFlickrProviderTests : IDisposable
 {
     private static readonly byte[] JpegBytes = [0xFF, 0xD8, 0xFF, 0xE0, 1, 2, 3];
 
+    /// <summary>For tests that only build URLs or validate settings; it never sends a request.</summary>
+    private static readonly HttpClient UnusedClient = new(FakeHttpMessageHandler.Returning(
+        () => throw new InvalidOperationException("No request expected.")));
+
     private readonly string _tempDir = Directory.CreateTempSubdirectory("imgforge-test-").FullName;
 
     [Fact]
@@ -30,7 +34,7 @@ public class LoremFlickrProviderTests : IDisposable
     [InlineData("city", 0, "https://loremflickr.com/1000/420/city?lock=0")]
     public void ImageUrl_IncludesKeywordAndOptionalLock(string keyword, int? lockValue, string expected)
     {
-        var provider = new LoremFlickrProvider(new HttpClient()) { Keyword = keyword, Lock = lockValue };
+        var provider = new LoremFlickrProvider(UnusedClient) { Keyword = keyword, Lock = lockValue };
 
         Assert.Equal(expected, provider.ImageUrl(1000, 420).AbsoluteUri);
     }
@@ -46,18 +50,44 @@ public class LoremFlickrProviderTests : IDisposable
     [InlineData("café")]
     public void Keyword_Invalid_Throws(string keyword)
     {
-        var ex = Assert.Throws<ArgumentException>(() => new LoremFlickrProvider(new HttpClient()) { Keyword = keyword });
+        var ex = Assert.Throws<ArgumentException>(() => new LoremFlickrProvider(UnusedClient) { Keyword = keyword });
 
-        Assert.Contains($"Invalid LoremFlickr keyword \"{keyword}\"", ex.Message);
+        Assert.Equal(nameof(LoremFlickrProvider.Keyword), ex.ParamName);
+        Assert.Equal(
+            $"Invalid LoremFlickr keyword \"{keyword}\". Use one or more keywords separated by commas, each made of " +
+            "letters, digits, '-' or '_', up to 100 characters in total (for example: abstract or city,night). " +
+            "(Parameter 'Keyword')",
+            ex.Message);
     }
 
     [Fact]
-    public void Keyword_Null_Throws() =>
-        Assert.Throws<ArgumentNullException>(() => new LoremFlickrProvider(new HttpClient()) { Keyword = null! });
+    public void Keyword_AtMaxLength_IsAccepted()
+    {
+        var keyword = new string('a', LoremFlickrProvider.MaxKeywordLength);
+
+        var provider = new LoremFlickrProvider(UnusedClient) { Keyword = keyword };
+
+        Assert.Equal(keyword, provider.Keyword);
+    }
 
     [Fact]
-    public void Lock_Negative_Throws() =>
-        Assert.Throws<ArgumentOutOfRangeException>(() => new LoremFlickrProvider(new HttpClient()) { Lock = -1 });
+    public void Keyword_OverMaxLength_Throws() =>
+        Assert.Throws<ArgumentException>(() => new LoremFlickrProvider(UnusedClient)
+        {
+            Keyword = new string('a', LoremFlickrProvider.MaxKeywordLength + 1)
+        });
+
+    [Fact]
+    public void Keyword_Null_Throws() =>
+        Assert.Throws<ArgumentNullException>(() => new LoremFlickrProvider(UnusedClient) { Keyword = null! });
+
+    [Fact]
+    public void Lock_Negative_Throws()
+    {
+        var ex = Assert.Throws<ArgumentOutOfRangeException>(() => new LoremFlickrProvider(UnusedClient) { Lock = -1 });
+
+        Assert.Equal(nameof(LoremFlickrProvider.Lock), ex.ParamName);
+    }
 
     [Fact]
     public async Task FetchAsync_ImageResponse_ReturnsBytesAndMediaType()

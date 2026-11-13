@@ -13,6 +13,9 @@ internal sealed partial class LoremFlickrProvider(HttpClient httpClient) : IRand
     /// <summary>The keyword used when none is given.</summary>
     public const string DefaultKeyword = "abstract";
 
+    /// <summary>The longest keyword value accepted, so a typo can't build an oversized URL.</summary>
+    public const int MaxKeywordLength = 100;
+
     public LoremFlickrProvider() : this(HttpImageDownloader.SharedClient) { }
 
     public string Name => "loremflickr.com";
@@ -22,20 +25,22 @@ internal sealed partial class LoremFlickrProvider(HttpClient httpClient) : IRand
 
     /// <summary>
     /// The photo subject: one keyword, or several separated by commas (e.g. <c>city,night</c>). Each keyword may
-    /// contain only ASCII letters, digits, <c>-</c> and <c>_</c>. Stored lower-case.
+    /// contain only ASCII letters, digits, <c>-</c> and <c>_</c>, and the whole value is at most
+    /// <see cref="MaxKeywordLength"/> characters. Stored lower-case.
     /// </summary>
-    /// <exception cref="ArgumentException">The value is empty or contains other characters.</exception>
+    /// <exception cref="ArgumentException">The value is empty, too long, or contains other characters.</exception>
     public string Keyword
     {
         get;
         init
         {
             ArgumentNullException.ThrowIfNull(value);
-            if (!KeywordPattern().IsMatch(value))
+            if (value.Length > MaxKeywordLength || !KeywordPattern().IsMatch(value))
                 throw new ArgumentException(
                     $"Invalid LoremFlickr keyword \"{value}\". Use one or more keywords separated by commas, " +
-                    "each made of letters, digits, '-' or '_' (for example: abstract or city,night).",
-                    nameof(value));
+                    $"each made of letters, digits, '-' or '_', up to {MaxKeywordLength} characters in total " +
+                    "(for example: abstract or city,night).",
+                    nameof(Keyword));
             field = value.ToLowerInvariant();
         }
     } = DefaultKeyword;
@@ -50,7 +55,7 @@ internal sealed partial class LoremFlickrProvider(HttpClient httpClient) : IRand
         init
         {
             if (value is < 0)
-                throw new ArgumentOutOfRangeException(nameof(value), value, "The LoremFlickr lock value cannot be negative.");
+                throw new ArgumentOutOfRangeException(nameof(Lock), value, "The LoremFlickr lock value cannot be negative.");
             field = value;
         }
     }
