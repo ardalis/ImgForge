@@ -129,17 +129,19 @@ with an error naming it (use plain `random` to try each provider in turn):
 |---|---|
 | `random` | Default: [picsum.photos](https://picsum.photos), falling back to [placehold.co](https://placehold.co) |
 | `random:picsum` | A random photo from picsum.photos |
-| `random:loremflickr` | A random Flickr photo from [loremflickr.com](https://loremflickr.com) matching `abstract` |
+| `random:loremflickr` | A random Flickr photo from [loremflickr.com](https://loremflickr.com) matching `abstract` (currently unreliable, see below) |
 | `random:loremflickr:<keyword>` | A loremflickr.com photo matching a keyword, or several separated by commas (e.g. `technology` or `city,night`) |
 | `random:placeholder` | A solid dark-slate (`#1e293b`) image from placehold.co |
 | `random:placeholder:<color>` | A solid image in a 6-digit hex color (e.g. `0f172a` or `#0F172A`) |
 
 ```bash
-imgforge generate --template blog --title "My Post" --bg random:loremflickr:technology --format blog
+imgforge generate --template blog --title "My Post" --bg random:placeholder:0f172a --format blog
 ```
 
-LoremFlickr isn't in the default order because loremflickr.com image requests were failing (HTTP 500) when it was
-added. An unknown provider name or an invalid keyword or color fails right away, with an error listing what's valid.
+LoremFlickr isn't in the default order because loremflickr.com image requests have been failing (HTTP 500 as of
+November 2026). If you pick it while it's down, you get an error naming the HTTP status. An unknown provider name or an
+invalid keyword or color fails right away, with an error listing what's valid. A local file whose name starts with
+`random:` (possible on Linux and macOS) needs a path prefix, e.g. `--bg ./random:photo.jpg`.
 
 ### Format presets
 
@@ -294,7 +296,7 @@ Scriban Liquid syntax is supported for variable injection:
 |---|---|---|
 | `title` | `string` | Main heading text |
 | `subtitle` | `string` | Optional subtitle text — empty string when `--subtitle` is not supplied; guard with `{% if subtitle %}` in templates |
-| `bg` | `string` | Background image URI — local paths become `file:///` URIs, HTTP(S) URLs are passed through, and `random` (or `random:<provider>`) becomes a `file:///` URI for a random image ImgForge downloaded (from picsum.photos, or a solid-color placeholder from placehold.co if picsum.photos fails) before rendering. Empty string when `--bg` is not supplied |
+| `bg` | `string` | Background image URI — local paths become `file:///` URIs, HTTP(S) URLs are passed through, and `random` (or `random:<provider>`) becomes a `file:///` URI for the random image ImgForge downloaded before rendering (see [Random backgrounds](#random-backgrounds)). Empty string when `--bg` is not supplied |
 | `width` | `int` | Viewport width in pixels |
 | `height` | `int` | Viewport height in pixels |
 | `overlays` | array | List of `{ src, style }` overlay image objects, one per `--overlay`. `src` is the command-line value, unchanged; `style` is always empty from the CLI |

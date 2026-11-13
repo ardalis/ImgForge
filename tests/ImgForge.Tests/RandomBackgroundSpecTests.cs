@@ -108,13 +108,15 @@ public class RandomBackgroundSpecTests
         Assert.Contains("option after the last \":\" is empty", ex.Message);
     }
 
-    [Fact]
-    public void Parse_OptionOnPicsum_Throws()
+    [Theory]
+    [InlineData("random:picsum:grayscale")]
+    [InlineData("random:picsum:")]
+    public void Parse_OptionOnPicsum_Throws(string background)
     {
-        var ex = Assert.Throws<ArgumentException>(() => RandomBackgroundSpec.Parse("random:picsum:grayscale"));
+        var ex = Assert.Throws<ArgumentException>(() => RandomBackgroundSpec.Parse(background));
 
         Assert.Equal(
-            "Invalid --bg value \"random:picsum:grayscale\": picsum doesn't take an option. Use \"random:picsum\".",
+            $"Invalid --bg value \"{background}\": picsum doesn't take an option. Use \"random:picsum\".",
             ex.Message);
     }
 

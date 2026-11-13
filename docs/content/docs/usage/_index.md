@@ -67,26 +67,28 @@ with an error naming it (use plain `random` to try each provider in turn):
 |---|---|
 | `random` | Default: [picsum.photos](https://picsum.photos), falling back to [placehold.co](https://placehold.co) |
 | `random:picsum` | A random photo from picsum.photos |
-| `random:loremflickr` | A random Flickr photo from [loremflickr.com](https://loremflickr.com) matching `abstract` |
+| `random:loremflickr` | A random Flickr photo from [loremflickr.com](https://loremflickr.com) matching `abstract` (currently unreliable, see below) |
 | `random:loremflickr:<keyword>` | A loremflickr.com photo matching a keyword, or several separated by commas (e.g. `technology` or `city,night`) |
 | `random:placeholder` | A solid dark-slate (`#1e293b`) image from placehold.co |
 | `random:placeholder:<color>` | A solid image in a 6-digit hex color (e.g. `0f172a` or `#0F172A`) |
 
 ```bash
-imgforge generate --template blog --title "My Post" --bg random:loremflickr:technology --format blog
+imgforge generate --template blog --title "My Post" --bg random:placeholder:0f172a --format blog
 ```
 
-LoremFlickr isn't in the default order because loremflickr.com image requests were failing (HTTP 500) when it was
-added. An unknown provider name or an invalid keyword or color fails right away, with an error listing what's valid.
+LoremFlickr isn't in the default order because loremflickr.com image requests have been failing (HTTP 500 as of
+November 2026). If you pick it while it's down, you get an error naming the HTTP status. An unknown provider name or an
+invalid keyword or color fails right away, with an error listing what's valid. A local file whose name starts with
+`random:` (possible on Linux and macOS) needs a path prefix, e.g. `--bg ./random:photo.jpg`.
 
-This requires network access to the random image providers (picsum.photos, then placehold.co). ImgForge downloads the image
-before rendering the template. Each provider gets 5 seconds to start responding and 30 seconds to finish the
-download. If a provider is unreachable, slow, or returns an HTTP error (or something that isn't an image), ImgForge
-moves on to the next provider in its list and prints a warning naming the provider that failed. If every provider
-fails, the command fails with an error that lists each provider and why it failed, and no image is written. Other
-remote background URLs are loaded by the page, which has up to 30 seconds to finish loading, and fail the same way.
-Try again later, use a local image or another URL with `--bg`, or omit `--bg` to use the template's built-in
-background design.
+This requires network access to the random image providers. ImgForge downloads the image before rendering the
+template. Each provider gets 5 seconds to start responding and 30 seconds to finish the download. With plain
+`random`, if a provider is unreachable, slow, or returns an HTTP error (or something that isn't an image), ImgForge
+moves on to the next provider in its list (picsum.photos, then placehold.co) and prints a warning naming the provider
+that failed. If every provider fails, the command fails with an error that lists each provider and why it failed,
+and no image is written. Other remote background URLs are loaded by the page, which has up to 30 seconds to finish
+loading, and fail the same way. Try again later, use a local image or another URL with `--bg`, or omit `--bg` to use
+the template's built-in background design.
 
 ### When Remote Images Fail to Load
 

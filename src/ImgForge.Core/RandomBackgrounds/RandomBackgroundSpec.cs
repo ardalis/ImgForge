@@ -77,6 +77,9 @@ internal sealed record RandomBackgroundSpec
         if (parts.Length == 2)
             return new RandomBackgroundSpec(name, null);
 
+        if (name == Picsum)
+            throw Invalid(background, $"{name} doesn't take an option. Use \"{Keyword}:{name}\".");
+
         var option = parts[2].Trim();
         if (option.Length == 0)
             throw Invalid(background, $"the {name} option after the last \":\" is empty. {OptionHelp(name)}");
@@ -87,8 +90,6 @@ internal sealed record RandomBackgroundSpec
                 throw Invalid(background, $"\"{option}\" is not a valid LoremFlickr keyword. {OptionHelp(name)}");
             case Placeholder when !PlaceholderProvider.IsValidColor(option):
                 throw Invalid(background, $"\"{option}\" is not a valid placeholder color. {OptionHelp(name)}");
-            case Picsum:
-                throw Invalid(background, $"{name} doesn't take an option. Use \"{Keyword}:{name}\".");
         }
 
         return new RandomBackgroundSpec(name, option);
@@ -118,8 +119,7 @@ internal sealed record RandomBackgroundSpec
     {
         LoremFlickr => "Use one or more keywords separated by commas, each made of letters, digits, '-' or '_', " +
             $"up to {LoremFlickrProvider.MaxKeywordLength} characters in total (for example: {Keyword}:{LoremFlickr}:technology).",
-        Placeholder => $"Use a 6-digit hex color such as 1e293b or #1E293B (for example: {Keyword}:{Placeholder}:0f172a).",
-        _ => ""
+        _ => $"Use a 6-digit hex color such as 1e293b or #1E293B (for example: {Keyword}:{Placeholder}:0f172a)."
     };
 
     private static ArgumentException Invalid(string background, string reason) =>
