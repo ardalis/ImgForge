@@ -19,7 +19,11 @@ public class ImageGenerator(TemplateRenderer renderer)
     /// </summary>
     internal TextWriter Warnings { get; set; } = Console.Error;
 
-    /// <summary>Downloads the image for <c>--bg random</c> before rendering.</summary>
+    /// <summary>
+    /// Downloads the image for <c>--bg random</c> (the default provider order) before rendering. Its
+    /// <see cref="RandomBackgroundResolver.DownloadTimeout"/> and <see cref="RandomBackgroundResolver.TempDirectory"/>
+    /// also apply to <c>--bg random:&lt;provider&gt;</c>.
+    /// </summary>
     internal RandomBackgroundResolver RandomBackgrounds { get; set; } = new();
 
     public async Task<string> GenerateAsync(GenerateOptions opts)
@@ -31,9 +35,10 @@ public class ImageGenerator(TemplateRenderer renderer)
         {
             if (TemplateRenderer.IsRandomBackground(opts.Background))
             {
+                var spec = RandomBackgroundSpec.Parse(opts.Background!);
                 // Report a bad --template before spending time on (or failing) a download.
                 TemplateRenderer.EnsureTemplateExists(opts.Template);
-                var resolved = await RandomBackgrounds.ResolveToFileAsync(opts.Width, opts.Height);
+                var resolved = await ResolverFor(spec).ResolveToFileAsync(opts.Width, opts.Height);
                 randomBackgroundFile = resolved.Path;
                 if (resolved.Failures.Count > 0)
                     await Warnings.WriteLineAsync(RandomBackgroundResolver.BuildFallbackWarning(resolved));
@@ -49,6 +54,20 @@ public class ImageGenerator(TemplateRenderer renderer)
                 RandomBackgroundResolver.TryDelete(randomBackgroundFile);
         }
     }
+
+    /// <summary>
+    /// The default resolver for <c>--bg random</c>, or a single-provider resolver (no fallback) for
+    /// <c>--bg random:&lt;provider&gt;</c>.
+    /// </summary>
+    internal RandomBackgroundResolver ResolverFor(RandomBackgroundSpec spec) =>
+        spec.CreateProvider() is { } provider
+            ? new RandomBackgroundResolver(provider)
+            {
+                BackgroundOption = spec.OptionText,
+                DownloadTimeout = RandomBackgrounds.DownloadTimeout,
+                TempDirectory = RandomBackgrounds.TempDirectory
+            }
+            : RandomBackgrounds;
 
     private async Task<string> GenerateResolvedAsync(GenerateOptions opts)
     {

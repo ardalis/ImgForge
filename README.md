@@ -87,7 +87,7 @@ imgforge generate \
   --template blog \             # built-in name ("blog", "youtube", "blog-subtitle") or path to a .html file or folder (with a template.html file in it); optional if a default template exists
   --title "Modular Monoliths Done Right" \
   --subtitle "A practical guide" \  # optional subtitle rendered below the title in templates that support it
-  --bg ./images/cover.jpg \     # local path, HTTP(S) URL, or "random" (downloads a random image from picsum.photos, or a solid-color placeholder if that fails); optional
+  --bg ./images/cover.jpg \     # local path, HTTP(S) URL, "random" (downloads a random image from picsum.photos, or a solid-color placeholder if that fails), or "random:<provider>"; optional
   --overlay https://example.com/logo.png \  # optional; repeat for multiple overlays; passed to the template as-is
   --headshot ./guest.jpg \      # optional guest headshot (local path or URL); placed in the template's headshot slot
   --headshot-filter blue-mono \ # built-in: blue-mono (default), mono, none — or a raw CSS filter string
@@ -106,7 +106,7 @@ imgforge generate \
 | `--template` | No | `.tools/imgforge/template.html` | Built-in template name (`blog`, `youtube`, `blog-subtitle`) or path to a `.html` file or a directory containing `template.html`. If omitted, a default template is looked up (see [Custom Templates](#custom-templates)); it's an error if none is found |
 | `--title` | Yes | — | Main heading text injected into the template |
 | `--subtitle` | No | — | Optional subtitle rendered below the title in templates that support it (e.g. `blog-subtitle`) |
-| `--bg` | No | — | Background image: local file path, HTTP(S) URL, or `random` (downloads a random image before rendering, from [picsum.photos](https://picsum.photos), falling back to a solid dark-slate placeholder from [placehold.co](https://placehold.co) so you still get an image; providers are tried in order, and one that doesn't start responding within 5 seconds, takes over 30 seconds to download, or returns an error is skipped with a warning; if every provider fails, the command fails with an error listing each provider and why it failed). The page, including remote images, must finish loading within 30 seconds. If a remote background is unreachable or returns an HTTP error, the command fails with an error naming the site (no image is written) so you can retry later or choose a different background |
+| `--bg` | No | — | Background image: local file path, HTTP(S) URL, `random`, or `random:<provider>` (see [Random backgrounds](#random-backgrounds)). `random` downloads a random image before rendering, from [picsum.photos](https://picsum.photos), falling back to a solid dark-slate placeholder from [placehold.co](https://placehold.co) so you still get an image; providers are tried in order, and one that doesn't start responding within 5 seconds, takes over 30 seconds to download, or returns an error is skipped with a warning; if every provider fails, the command fails with an error listing each provider and why it failed). The page, including remote images, must finish loading within 30 seconds. If a remote background is unreachable or returns an HTTP error, the command fails with an error naming the site (no image is written) so you can retry later or choose a different background |
 | `--overlay` | No | — | Overlay image source. Repeatable for multiple overlays. Passed to the template as-is (see [Overlay Images](#overlay-images)). A remote overlay that fails to load stops the run with an error |
 | `--headshot` | No | — | Guest headshot image (local path or HTTP(S) URL) placed in the template's headshot slot. A remote headshot that fails to load stops the run with an error |
 | `--headshot-filter` | No | `blue-mono` | Filter applied to the headshot. Built-in: `blue-mono`, `mono`, `none`. Or supply a raw CSS `filter` string |
@@ -116,6 +116,30 @@ imgforge generate \
 | `--out-dir` | No | `.` | Output directory. Filename is derived from `--title`. Ignored if `--out` is provided |
 | `--width` | No | from `--format` | Viewport width in pixels. Overrides `--format`. With no `--format`, `--width`, or `--height`, you're prompted to pick a format; if only `--height` is given, width falls back to `1200` |
 | `--height` | No | from `--format` | Viewport height in pixels. Overrides `--format`. With no `--format`, `--width`, or `--height`, you're prompted to pick a format; if only `--width` is given, height falls back to `630` |
+
+### Random backgrounds
+
+`--bg random` downloads a random image before rendering, trying [picsum.photos](https://picsum.photos) and then a
+solid-color placeholder from [placehold.co](https://placehold.co).
+
+To use one provider only, use `random:<provider>`. There's no fallback, so if that provider fails, the command fails
+with an error naming it (use plain `random` to try each provider in turn):
+
+| `--bg` value | Image |
+|---|---|
+| `random` | Default: [picsum.photos](https://picsum.photos), falling back to [placehold.co](https://placehold.co) |
+| `random:picsum` | A random photo from picsum.photos |
+| `random:loremflickr` | A random Flickr photo from [loremflickr.com](https://loremflickr.com) matching `abstract` |
+| `random:loremflickr:<keyword>` | A loremflickr.com photo matching a keyword, or several separated by commas (e.g. `technology` or `city,night`) |
+| `random:placeholder` | A solid dark-slate (`#1e293b`) image from placehold.co |
+| `random:placeholder:<color>` | A solid image in a 6-digit hex color (e.g. `0f172a` or `#0F172A`) |
+
+```bash
+imgforge generate --template blog --title "My Post" --bg random:loremflickr:technology --format blog
+```
+
+LoremFlickr isn't in the default order because loremflickr.com image requests were failing (HTTP 500) when it was
+added. An unknown provider name or an invalid keyword or color fails right away, with an error listing what's valid.
 
 ### Format presets
 
@@ -270,7 +294,7 @@ Scriban Liquid syntax is supported for variable injection:
 |---|---|---|
 | `title` | `string` | Main heading text |
 | `subtitle` | `string` | Optional subtitle text — empty string when `--subtitle` is not supplied; guard with `{% if subtitle %}` in templates |
-| `bg` | `string` | Background image URI — local paths become `file:///` URIs, HTTP(S) URLs are passed through, and `random` becomes a `file:///` URI for a random image ImgForge downloaded (from picsum.photos, or a solid-color placeholder from placehold.co if picsum.photos fails) before rendering. Empty string when `--bg` is not supplied |
+| `bg` | `string` | Background image URI — local paths become `file:///` URIs, HTTP(S) URLs are passed through, and `random` (or `random:<provider>`) becomes a `file:///` URI for a random image ImgForge downloaded (from picsum.photos, or a solid-color placeholder from placehold.co if picsum.photos fails) before rendering. Empty string when `--bg` is not supplied |
 | `width` | `int` | Viewport width in pixels |
 | `height` | `int` | Viewport height in pixels |
 | `overlays` | array | List of `{ src, style }` overlay image objects, one per `--overlay`. `src` is the command-line value, unchanged; `style` is always empty from the CLI |

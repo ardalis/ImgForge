@@ -12,9 +12,12 @@ public class TemplateRenderer
             ["none"] = "none"
         };
 
-    /// <summary>True when the background option asks for a random image (<c>--bg random</c>).</summary>
+    /// <summary>
+    /// True when the background option asks for a random image (<c>--bg random</c> or
+    /// <c>--bg random:&lt;provider&gt;</c>).
+    /// </summary>
     internal static bool IsRandomBackground(string? background) =>
-        string.Equals(background?.Trim(), "random", StringComparison.OrdinalIgnoreCase);
+        RandomBackgrounds.RandomBackgroundSpec.IsRandom(background);
 
     /// <summary>Throws the same error <see cref="Render"/> would if <paramref name="template"/> can't be loaded.</summary>
     internal static void EnsureTemplateExists(string template) => _ = LoadTemplateSource(template);

@@ -258,6 +258,7 @@ public class TemplateRendererTests
     [Theory]
     [InlineData("random")]
     [InlineData(" Random ")]
+    [InlineData("random:picsum")]
     public void Render_UnresolvedRandomBackground_Throws(string bg)
     {
         var opts = new GenerateOptions(
