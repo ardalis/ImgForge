@@ -176,6 +176,48 @@ public class ImageGeneratorLoadFailureTests : IDisposable
     }
 
     [Fact]
+    public async Task GenerateAsync_RandomBackgroundFirstProviderFails_WarnsAndUsesNextProvider()
+    {
+        var failing = new StubRandomBackgroundProvider((_, _, _) =>
+            throw new RandomBackgroundProviderException("the site returned HTTP 522"), "first.example");
+        var working = new StubRandomBackgroundProvider((_, _, _) =>
+            Task.FromResult(new RandomBackgroundImage(Convert.FromBase64String(RedPixelPng), "image/png")), "second.example");
+        var (opts, outPath) = CreateOptions("<html><body><img src='{{ bg }}'></body></html>", background: "random");
+        var warnings = new StringWriter();
+        var tempDir = NewTempDirectory("bg");
+        var generator = NewGenerator();
+        generator.Warnings = warnings;
+        generator.RandomBackgrounds = new RandomBackgroundResolver(failing, working) { TempDirectory = tempDir };
+
+        await generator.GenerateAsync(opts);
+
+        Assert.True(File.Exists(outPath));
+        Assert.Equal(
+            "Warning: first.example failed (the site returned HTTP 522). Used second.example for --bg random instead." +
+            Environment.NewLine,
+            warnings.ToString());
+        Assert.Empty(Directory.GetFiles(tempDir));
+    }
+
+    [Fact]
+    public async Task GenerateAsync_RandomBackgroundAllProvidersFail_ThrowsListingEachAndWritesNoImage()
+    {
+        var first = new StubRandomBackgroundProvider((_, _, _) =>
+            throw new RandomBackgroundProviderException("the site returned HTTP 522"), "first.example");
+        var second = new StubRandomBackgroundProvider((_, _, _) =>
+            throw new RandomBackgroundProviderException("the site did not respond within 5 seconds"), "second.example");
+        var (opts, outPath) = CreateOptions("<html><body><img src='{{ bg }}'></body></html>", background: "random");
+        var generator = NewGenerator();
+        generator.RandomBackgrounds = new RandomBackgroundResolver(first, second);
+
+        var ex = await Assert.ThrowsAsync<ImageLoadException>(() => generator.GenerateAsync(opts));
+
+        Assert.Contains("  - first.example: the site returned HTTP 522", ex.Message);
+        Assert.Contains("  - second.example: the site did not respond within 5 seconds", ex.Message);
+        Assert.False(File.Exists(outPath), "No output should be written when every random background provider fails.");
+    }
+
+    [Fact]
     public async Task GenerateAsync_RandomBackgroundThenRenderFails_DeletesDownloadedImage()
     {
         var provider = new StubRandomBackgroundProvider((_, _, _) =>

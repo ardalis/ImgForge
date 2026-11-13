@@ -33,7 +33,10 @@ public class ImageGenerator(TemplateRenderer renderer)
             {
                 // Report a bad --template before spending time on (or failing) a download.
                 TemplateRenderer.EnsureTemplateExists(opts.Template);
-                randomBackgroundFile = await RandomBackgrounds.ResolveToFileAsync(opts.Width, opts.Height);
+                var resolved = await RandomBackgrounds.ResolveToFileAsync(opts.Width, opts.Height);
+                randomBackgroundFile = resolved.Path;
+                if (resolved.Failures.Count > 0)
+                    await Warnings.WriteLineAsync(RandomBackgroundResolver.BuildFallbackWarning(resolved));
                 opts = opts with { Background = randomBackgroundFile };
             }
 
