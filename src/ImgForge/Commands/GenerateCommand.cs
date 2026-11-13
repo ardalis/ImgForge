@@ -17,6 +17,33 @@ public static class GenerateCommand
         new("Podcast Episode Art",      3000, 3000),
     ];
 
+    /// <summary>Example command lines shown at the end of <c>imgforge generate --help</c>.</summary>
+    internal static readonly IReadOnlyList<HelpExample> Examples =
+    [
+        new("Blog / Open Graph card with a random background",
+            "generate --template blog --title \"My Post Title\" --bg random --format blog"),
+        new("YouTube thumbnail from a local background image, written to a specific file",
+            "generate --template youtube --title \"My Video Title\" --bg ./bg.jpg --out thumb.png --format youtube"),
+        new("Blog card with subtitle and headshot",
+            "generate --template blog-subtitle --title \"Advanced .NET Patterns\" --subtitle \"A practical guide\" --bg random --headshot ./photo.jpg --format blog"),
+        new("Solid-color background from one provider (random:<provider>, no fallback)",
+            "generate --template blog --title \"My Post\" --bg random:placeholder:0f172a --format blog"),
+        new("Random photo from picsum.photos only",
+            "generate --template blog --title \"My Post\" --bg random:picsum --format blog"),
+        new("Podcast episode art with a greyscale headshot and template variables (template file from the repository)",
+            "generate --template ./templates/podcast-episode.html --title \"Build vs Buy\" --headshot ./guest.jpg --headshot-filter mono --var season=3 --var episode=42 --format podcast-episode"),
+        new("Custom template folder with an overlay image and explicit size, written to a directory",
+            "generate --template ./my-template --title \"Hello\" --overlay https://example.com/logo.png --width 1600 --height 900 --out-dir ./output"),
+        new("Use the default template (.tools/imgforge/template.html); omit --format to be prompted for a size",
+            "generate --title \"My Episode Title\""),
+    ];
+
+    /// <summary>Width used when only <c>--height</c> is given and there's no <c>--format</c>.</summary>
+    private const int FallbackWidth = 1200;
+
+    /// <summary>Height used when only <c>--width</c> is given and there's no <c>--format</c>.</summary>
+    private const int FallbackHeight = 630;
+
     public static Command Build()
     {
         var templateOpt = new Option<string?>(
@@ -46,7 +73,9 @@ public static class GenerateCommand
 
         var overlayOpt = new Option<string[]>(
             name: "--overlay",
-            description: "Overlay image path. May be repeated for multiple overlays.")
+            description: "Overlay image source (HTTP(S) URL or file:/// URI), passed to the template as-is. " +
+                         "A relative path resolves against the template's folder, so it only works with a file or folder template, not a built-in one. " +
+                         "May be repeated for multiple overlays.")
         {
             AllowMultipleArgumentsPerToken = false,
             Arity = ArgumentArity.ZeroOrMore
@@ -54,7 +83,7 @@ public static class GenerateCommand
 
         var headshotOpt = new Option<string?>(
             name: "--headshot",
-            description: "Guest headshot image path to place in the template's headshot slot.");
+            description: "Guest headshot image (local path or HTTP(S) URL) to place in the template's headshot slot.");
 
         var headshotFilterOpt = new Option<string>(
             name: "--headshot-filter",
@@ -84,15 +113,15 @@ public static class GenerateCommand
             name: "--out-dir",
             description: "Output directory. Filename is derived from --title. Ignored if --out is provided.");
 
-        var widthOpt = new Option<int>(
+        var widthOpt = new Option<int?>(
             name: "--width",
-            getDefaultValue: () => 1200,
-            description: "Viewport width in pixels. Overrides --format.");
+            description: $"Viewport width in pixels. Overrides --format. With no --format, --width, or --height, you're prompted to pick a format; " +
+                         $"if only --height is given (and no --format), width is {FallbackWidth}.");
 
-        var heightOpt = new Option<int>(
+        var heightOpt = new Option<int?>(
             name: "--height",
-            getDefaultValue: () => 630,
-            description: "Viewport height in pixels. Overrides --format.");
+            description: $"Viewport height in pixels. Overrides --format. With no --format, --width, or --height, you're prompted to pick a format; " +
+                         $"if only --width is given (and no --format), height is {FallbackHeight}.");
 
         var cmd = new Command("generate", "Generate an image from an HTML template.")
         {
@@ -126,13 +155,14 @@ public static class GenerateCommand
             var out_ = FileNameHelper.ResolveOutputPath(
                                    context.ParseResult.GetValueForOption(outOpt), outDir, title);
 
-            // Detect whether --width/--height were explicitly supplied by the user
-            // (IsImplicit = true means the value came from getDefaultValue, not the command line)
-            bool widthExplicit = context.ParseResult.FindResultFor(widthOpt) is { IsImplicit: false };
-            bool heightExplicit = context.ParseResult.FindResultFor(heightOpt) is { IsImplicit: false };
+            // --width/--height have no default, so a value means the user supplied it.
+            int? widthArg = context.ParseResult.GetValueForOption(widthOpt);
+            int? heightArg = context.ParseResult.GetValueForOption(heightOpt);
+            bool widthExplicit = widthArg is not null;
+            bool heightExplicit = heightArg is not null;
 
-            int width = context.ParseResult.GetValueForOption(widthOpt);
-            int height = context.ParseResult.GetValueForOption(heightOpt);
+            int width = widthArg ?? FallbackWidth;
+            int height = heightArg ?? FallbackHeight;
 
             try
             {

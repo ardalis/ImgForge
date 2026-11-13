@@ -99,6 +99,8 @@ imgforge generate \
   --height 630                  # explicit height — overrides --format; prompted if neither is given
 ```
 
+Run `imgforge generate --help` to see every option and a set of examples in the terminal.
+
 ### All flags
 
 | Flag | Required | Default | Description |
