@@ -65,14 +65,35 @@ provider fails, the error lists each provider tried and why it failed.
 
 ## Phase 4 — Independent review
 
-- [ ] A separate agent with fresh context reviews the full diff against #25: correctness, missed requirements, test
+- [x] A separate agent with fresh context reviews the full diff against #25: correctness, missed requirements, test
       gaps, regressions, security, performance, accessibility
-- [ ] Address all significant findings; record skipped ones with reasons below
+- [x] Address all significant findings; record skipped ones with reasons below
 
 ## Phase 5 — Final verification
 
-- [ ] `dotnet BuildTestFormat.cs` passes (build, all tests, `dotnet format --verify-no-changes`)
+- [x] `dotnet BuildTestFormat.cs` passes (build, all tests, `dotnet format --verify-no-changes`)
 
 ## Review notes
 
-_(filled in after Phase 4)_
+A separate general-purpose agent with fresh context reviewed `git diff main...HEAD`. One medium finding, four low.
+
+Addressed:
+1. **Network error mid-download escaped the fallback (medium):** a connection dropping while the body downloads
+   throws `HttpIOException`/`IOException`, not `HttpRequestException`, so it skipped later providers and printed a
+   bare error. `HttpImageDownloader` now turns an `IOException` during the body read into a
+   `RandomBackgroundProviderException` ("the connection was lost while downloading the image (...)"). Test:
+   `FirstProviderConnectionDropsMidDownload_FallsThroughToSecond` (real `PicsumProvider`, body stream throws).
+3. **Any unexpected cancellation was reported as our 30s download timeout:** the timeout message now requires our
+   own per-provider token to have fired; other cancellations from a provider are recorded as "the request timed
+   out" and the chain continues. Test: `ProviderCancelsForItsOwnReasons_ReportedAsTimeoutNotOurDownloadLimit`.
+4. **Timing-test flake margin:** the per-provider budget test now checks the second provider's token on entry
+   with a 500ms limit and a 10ms delay, instead of relying on a 150ms/300ms gap.
+
+Not changed (deliberately):
+2. **No overall cap across the chain (N providers × 30s worst case):** the issue asks for a per-provider timeout,
+   which is what makes a dead provider cost ~5s. Worst case only applies to a provider that responds and then
+   trickles its body. With one default provider today this has no effect; revisit when #26–#28 add providers to
+   the default order (e.g. an overall deadline or a shorter body limit when several providers are configured).
+5. **Fallback warning always prints to stderr:** intended. It only appears when a provider actually failed, which
+   is useful to know, and there is no `--verbose` flag to gate it on. It goes to stderr so stdout output is
+   unchanged; the run still exits 0.

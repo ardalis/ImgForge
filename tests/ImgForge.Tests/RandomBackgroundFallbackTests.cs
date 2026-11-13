@@ -66,16 +66,17 @@ public class RandomBackgroundFallbackTests : IDisposable
     [Fact]
     public async Task DownloadTimeoutIsPerProvider_SecondProviderGetsItsOwnFullBudget()
     {
-        var timeout = TimeSpan.FromMilliseconds(300);
+        var timeout = TimeSpan.FromMilliseconds(500);
         var slowToFail = new StubRandomBackgroundProvider(async (_, _, ct) =>
         {
             await Task.Delay(Timeout.Infinite, ct);
             throw new UnreachableException();
         }, "slow.example");
-        // Takes most of one timeout window: it would be cut off if the budget were shared with the first provider.
+        // If the budget were shared, the first provider used all of it and this token would already be cancelled.
         var second = new StubRandomBackgroundProvider(async (_, _, ct) =>
         {
-            await Task.Delay(TimeSpan.FromMilliseconds(150), ct);
+            ct.ThrowIfCancellationRequested();
+            await Task.Delay(TimeSpan.FromMilliseconds(10), ct);
             return new RandomBackgroundImage(SecondImage, "image/jpeg");
         }, "second.example");
         var resolver = new RandomBackgroundResolver(slowToFail, second) { DownloadTimeout = timeout, TempDirectory = _tempDir };
@@ -84,7 +85,7 @@ public class RandomBackgroundFallbackTests : IDisposable
 
         Assert.Equal("second.example", resolved.ProviderName);
         Assert.Equal(
-            new RandomBackgroundProviderFailure("slow.example", "the image did not finish downloading within 0.3 seconds"),
+            new RandomBackgroundProviderFailure("slow.example", "the image did not finish downloading within 0.5 seconds"),
             Assert.Single(resolved.Failures));
     }
 
@@ -99,6 +100,43 @@ public class RandomBackgroundFallbackTests : IDisposable
 
         Assert.Equal(
             new RandomBackgroundProviderFailure("down.example", "the site could not be reached (No such host is known)"),
+            Assert.Single(resolved.Failures));
+    }
+
+    [Fact]
+    public async Task FirstProviderConnectionDropsMidDownload_FallsThroughToSecond()
+    {
+        // A real PicsumProvider whose response body fails partway through, as when the connection drops.
+        var dropping = FakeHttpMessageHandler.Returning(() =>
+        {
+            var body = new StreamContent(new FailingStream(new HttpIOException(
+                HttpRequestError.ResponseEnded, "The response ended prematurely.")));
+            body.Headers.ContentType = new("image/jpeg");
+            return new HttpResponseMessage(HttpStatusCode.OK) { Content = body };
+        });
+        var picsum = new PicsumProvider(new HttpClient(dropping));
+        var second = Succeeding("second.example", SecondImage);
+
+        var resolved = await NewResolver(picsum, second).ResolveToFileAsync(1200, 630);
+
+        Assert.Equal("second.example", resolved.ProviderName);
+        var failure = Assert.Single(resolved.Failures);
+        Assert.Equal("picsum.photos", failure.ProviderName);
+        // The runtime appends the error code to HttpIOException's message, e.g. "... prematurely. (ResponseEnded)".
+        Assert.StartsWith("the connection was lost while downloading the image (The response ended prematurely", failure.Reason);
+    }
+
+    [Fact]
+    public async Task ProviderCancelsForItsOwnReasons_ReportedAsTimeoutNotOurDownloadLimit()
+    {
+        var selfCancelling = new StubRandomBackgroundProvider(
+            (_, _, _) => throw new TaskCanceledException("HttpClient.Timeout elapsed"), "own-timeout.example");
+        var second = Succeeding("second.example", SecondImage);
+
+        var resolved = await NewResolver(selfCancelling, second).ResolveToFileAsync(1200, 630);
+
+        Assert.Equal(
+            new RandomBackgroundProviderFailure("own-timeout.example", "the request timed out"),
             Assert.Single(resolved.Failures));
     }
 
@@ -198,6 +236,18 @@ public class RandomBackgroundFallbackTests : IDisposable
 
     private static StubRandomBackgroundProvider Failing(string name, string reason) =>
         new((_, _, _) => throw new RandomBackgroundProviderException(reason), name);
+
+    /// <summary>A readable stream that fails on the first read.</summary>
+    private sealed class FailingStream(Exception error) : MemoryStream
+    {
+        public override int Read(byte[] buffer, int offset, int count) => throw error;
+
+        public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default) =>
+            ValueTask.FromException<int>(error);
+
+        public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken) =>
+            Task.FromException<int>(error);
+    }
 
     public void Dispose()
     {

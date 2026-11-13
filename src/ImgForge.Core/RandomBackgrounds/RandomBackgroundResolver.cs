@@ -74,9 +74,14 @@ internal sealed class RandomBackgroundResolver
         {
             return (await provider.FetchAsync(width, height, timeout.Token), null);
         }
-        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested && timeout.IsCancellationRequested)
         {
             return (null, $"the image did not finish downloading within {HttpImageDownloader.FormatSeconds(DownloadTimeout)}");
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            // Cancelled for the provider's own reasons (e.g. an HttpClient.Timeout), not by us or the caller.
+            return (null, "the request timed out");
         }
         catch (RandomBackgroundProviderException ex)
         {
