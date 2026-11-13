@@ -42,6 +42,9 @@ public class ImageGenerator(TemplateRenderer renderer)
                 randomBackgroundFile = resolved.Path;
                 if (resolved.Failures.Count > 0)
                     await Warnings.WriteLineAsync(RandomBackgroundResolver.BuildFallbackWarning(resolved));
+                // Credit the photographer (required by Unsplash's API guidelines). stderr, so stdout stays the output path.
+                if (resolved.Attribution is not null)
+                    await Warnings.WriteLineAsync(resolved.Attribution);
                 opts = opts with { Background = randomBackgroundFile };
             }
 

@@ -151,7 +151,8 @@ public class RandomBackgroundResolverTests
     [Fact]
     public void DefaultResolver_UsesPicsumThenPlaceholderWithFiveSecondResponseAndThirtySecondDownloadTimeouts()
     {
-        var resolver = new RandomBackgroundResolver();
+        // DefaultProviders(null): as if UNSPLASH_ACCESS_KEY isn't set, whatever this machine's environment is.
+        var resolver = new RandomBackgroundResolver(RandomBackgroundResolver.DefaultProviders(unsplashAccessKey: null));
 
         Assert.Collection(resolver.Providers,
             p => Assert.Equal(TimeSpan.FromSeconds(5), Assert.IsType<PicsumProvider>(p).ResponseTimeout),

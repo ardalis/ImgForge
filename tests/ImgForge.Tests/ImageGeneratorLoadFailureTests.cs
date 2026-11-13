@@ -200,6 +200,26 @@ public class ImageGeneratorLoadFailureTests : IDisposable
     }
 
     [Fact]
+    public async Task GenerateAsync_RandomBackgroundWithAttribution_WritesAttributionToWarnings()
+    {
+        var provider = new StubRandomBackgroundProvider((_, _, _) =>
+            Task.FromResult(new RandomBackgroundImage(Convert.FromBase64String(RedPixelPng), "image/png")
+            {
+                Attribution = "Photo by Jane Doe on Unsplash"
+            }), "unsplash.com");
+        var (opts, outPath) = CreateOptions("<html><body><img src='{{ bg }}'></body></html>", background: "random");
+        var warnings = new StringWriter();
+        var generator = NewGenerator();
+        generator.Warnings = warnings;
+        generator.RandomBackgrounds = new RandomBackgroundResolver(provider) { TempDirectory = NewTempDirectory("bg") };
+
+        await generator.GenerateAsync(opts);
+
+        Assert.True(File.Exists(outPath));
+        Assert.Equal("Photo by Jane Doe on Unsplash" + Environment.NewLine, warnings.ToString());
+    }
+
+    [Fact]
     public async Task GenerateAsync_RandomBackgroundAllProvidersFail_ThrowsListingEachAndWritesNoImage()
     {
         var first = new StubRandomBackgroundProvider((_, _, _) =>

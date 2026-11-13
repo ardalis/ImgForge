@@ -22,7 +22,7 @@ public class GenerateCommandBackgroundTests
         Assert.Equal(1, exitCode);
         Assert.Equal(
             "Error: Invalid --bg value \"random:bogus\": unknown provider \"bogus\". " +
-            "Valid providers: picsum, loremflickr, placeholder (for example: --bg random:picsum).",
+            "Valid providers: picsum, loremflickr, placeholder, unsplash (for example: --bg random:picsum).",
             stderr.Trim());
         Assert.DoesNotContain("Choose a destination format", stdout);
     }
