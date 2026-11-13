@@ -60,9 +60,17 @@ imgforge generate --template blog --title "My Post" --bg random --format blog
 ```
 
 This requires network access to picsum.photos. ImgForge waits up to 30 seconds for the page, including all
-remote images, to load. If picsum.photos (or any other remote background URL) is unreachable or slow, the
-command fails with an error that names the site. Try again later, use a local image or another URL with `--bg`,
-or omit `--bg` to use the template's built-in background design.
+remote images, to load. If picsum.photos (or any other remote background URL) is unreachable, slow, or returns
+an HTTP error, the command fails with an error that names the site, and no image is written. Try again later,
+use a local image or another URL with `--bg`, or omit `--bg` to use the template's built-in background design.
+
+### When Remote Images Fail to Load
+
+- **Images you pass on the command line** (`--bg`, `--headshot`, `--overlay`): if a remote URL can't be reached
+  (offline, DNS failure, connection refused) or returns an HTTP error such as 404, ImgForge stops with an
+  error naming the option and site, exits with code 1, and writes no image.
+- **Remote resources referenced by the template itself** (fonts, stylesheets, hard-coded images): a failure
+  prints a `Warning:` line to stderr, and the image is still generated without that resource.
 
 ## Headshot Images
 
