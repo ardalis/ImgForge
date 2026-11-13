@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Globalization;
 using System.Runtime.InteropServices;
 using PuppeteerSharp;
+using PuppeteerSharp.BrowserData;
 
 namespace ImgForge.Core;
 
@@ -192,13 +193,36 @@ public class ImageGenerator(TemplateRenderer renderer)
 
     private const string RandomBackgroundHost = "picsum.photos";
 
+    // Serializes the first-run Chromium download. Concurrent GenerateAsync calls would otherwise all see
+    // "no browser installed" and download to the same zip file at once, failing with an IOException.
+    private static readonly SemaphoreSlim BrowserDownloadLock = new(1, 1);
+    private static volatile bool _browserReady;
+
     private static async Task EnsureBrowserAsync()
     {
-        var fetcher = new BrowserFetcher();
-        if (!fetcher.GetInstalledBrowsers().Any())
+        if (_browserReady) return;
+
+        await BrowserDownloadLock.WaitAsync();
+        try
         {
-            Console.Error.WriteLine("Downloading Chromium (first run only)...");
-            await fetcher.DownloadAsync();
+            if (_browserReady) return;
+
+            // Check for the exact Chrome build Puppeteer.LaunchAsync will start. Another browser (e.g. a
+            // headless shell) or an older build left by a previous PuppeteerSharp version doesn't count.
+            var fetcher = new BrowserFetcher();
+            var installed = fetcher.GetInstalledBrowsers().Any(b =>
+                b.Browser == SupportedBrowser.Chrome && b.BuildId == Chrome.DefaultBuildId);
+            if (!installed)
+            {
+                Console.Error.WriteLine("Downloading Chromium (first run only)...");
+                await fetcher.DownloadAsync();
+            }
+
+            _browserReady = true;
+        }
+        finally
+        {
+            BrowserDownloadLock.Release();
         }
     }
 }

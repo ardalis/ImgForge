@@ -116,3 +116,18 @@ Fresh-context review found no blocking defects. Findings:
     correctly with no warning, so there is no false positive on redirects.
   - `--bg random` at the time of testing: picsum.photos itself was down (curl: no response after 20 s,
     Cloudflare 522 after 39 s), and the #19 timeout message was shown as expected.
+
+## CI fix: concurrent first-run Chromium download
+
+The first CI run failed: 7 integration tests threw `PuppeteerException: Failed to download Chrome` wrapping
+`IOException ... chrome-linux64.zip ... being used by another process`. xUnit runs test classes in parallel, and on a
+fresh runner `ImageGeneratorTests` and the new `ImageGeneratorLoadFailureTests` both started the first-run Chromium
+download into the same zip. This is a real library bug (any concurrent `GenerateAsync` calls on a fresh machine hit it),
+not just a test problem. Fixed in `ImageGenerator.EnsureBrowserAsync`:
+
+- [x] Serialize the download with a static `SemaphoreSlim`, and skip the check after the first success.
+- [x] Check for the exact Chrome build Puppeteer launches (`SupportedBrowser.Chrome` + `Chrome.DefaultBuildId`)
+      instead of `GetInstalledBrowsers().Any()`. Before, a leftover headless shell or an older Chrome build from a
+      previous PuppeteerSharp version suppressed the download, and the launch then failed with "cannot find the file".
+- [x] Reproduced locally by deleting the cached browsers: without the fix, 3 tests failed with the same IOException;
+      with the fix, 95/95 passed from a fresh state. `dotnet BuildTestFormat.cs` is clean.
