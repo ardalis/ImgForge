@@ -1,5 +1,6 @@
 using System.CommandLine;
 using ImgForge.Core;
+using ImgForge.Core.Configuration;
 using ImgForge.Core.RandomBackgrounds;
 
 namespace ImgForge.Commands;
@@ -30,6 +31,8 @@ public static class GenerateCommand
             "generate --template blog --title \"My Post\" --bg random:placeholder:0f172a --format blog"),
         new("Random photo from picsum.photos only",
             "generate --template blog --title \"My Post\" --bg random:picsum --format blog"),
+        new("Random image from your own folders (add them first with: config add image-directories <folder>)",
+            "generate --template blog --title \"My Post\" --bg random:local --format blog"),
         new("Podcast episode art with a greyscale headshot and template variables (template file from the repository)",
             "generate --template ./templates/podcast-episode.html --title \"Build vs Buy\" --headshot ./guest.jpg --headshot-filter mono --var season=3 --var episode=42 --format podcast-episode"),
         new("Custom template folder with an overlay image and explicit size, written to a directory",
@@ -44,8 +47,14 @@ public static class GenerateCommand
     /// <summary>Height used when only <c>--width</c> is given and there's no <c>--format</c>.</summary>
     private const int FallbackHeight = 630;
 
-    public static Command Build()
+    /// <param name="createStore">
+    /// Creates the user settings store, read for <c>image-directories</c> when <c>--bg</c> is random. Defaults to
+    /// <see cref="UserSettingsStore.CreateDefault"/>; tests pass a temp folder.
+    /// </param>
+    public static Command Build(Func<UserSettingsStore>? createStore = null)
     {
+        createStore ??= UserSettingsStore.CreateDefault;
+
         var templateOpt = new Option<string?>(
             name: "--template",
             description: "Built-in template name (blog, youtube, blog-subtitle), path to a .html file, or a directory containing template.html. " +
@@ -65,11 +74,13 @@ public static class GenerateCommand
             name: "--bg",
             description: "Background image: local file path, HTTP(S) URL, or \"random\". " +
                          "\"random\" downloads a random image before rendering, trying Unsplash, Pexels, and Pixabay (each only if its UNSPLASH_ACCESS_KEY, PEXELS_API_KEY, or PIXABAY_API_KEY environment variable is set), " +
-                         "then picsum.photos, then a solid-color placeholder from placehold.co. " +
+                         "then picsum.photos, then a random image from your local image folders (the image-directories setting, if any; see 'imgforge config'), " +
+                         "cropped and scaled to the output size on this machine, then a solid-color placeholder from placehold.co. " +
                          "\"random:<provider>\" uses only that provider (no fallback): picsum, loremflickr (optionally random:loremflickr:<keyword>, e.g. random:loremflickr:technology; " +
                          "loremflickr.com has been unreliable, so it isn't in the default order), " +
                          "placeholder (optionally random:placeholder:<hex color>, e.g. random:placeholder:0f172a), " +
-                         "unsplash (needs UNSPLASH_ACCESS_KEY), pexels (needs PEXELS_API_KEY), or pixabay (needs PIXABAY_API_KEY). Optional.");
+                         "unsplash (needs UNSPLASH_ACCESS_KEY), pexels (needs PEXELS_API_KEY), pixabay (needs PIXABAY_API_KEY), " +
+                         "or local (any .jpg, .jpeg, .png, .webp, .gif, or .avif in your image-directories folders and their subfolders). Optional.");
 
         var overlayOpt = new Option<string[]>(
             name: "--overlay",
@@ -168,6 +179,7 @@ public static class GenerateCommand
             {
                 // Catch a mistyped --bg random:<provider> before resolving the template or prompting for a format.
                 ValidateBackground(bg);
+                var imageDirectories = LoadImageDirectories(bg, createStore, Console.Error);
 
                 var (resolvedTemplate, usedDefaultTemplate) = TemplatePathResolver.ResolveTemplate(template);
                 if (usedDefaultTemplate)
@@ -213,7 +225,7 @@ public static class GenerateCommand
                 );
 
                 var renderer = new TemplateRenderer();
-                var generator = new ImageGenerator(renderer);
+                var generator = new ImageGenerator(renderer) { ImageDirectories = imageDirectories };
                 var result = await generator.GenerateAsync(opts);
                 Console.WriteLine(result);
             }
@@ -233,6 +245,45 @@ public static class GenerateCommand
     {
         if (RandomBackgroundSpec.IsRandom(background))
             _ = RandomBackgroundSpec.Parse(background!);
+    }
+
+    /// <summary>
+    /// The <c>image-directories</c> setting when <paramref name="background"/> is plain <c>random</c> or
+    /// <c>random:local</c>; otherwise none, without reading settings, so a broken settings file can't affect backgrounds
+    /// that don't use local folders.
+    /// </summary>
+    /// <exception cref="ArgumentException"><c>--bg random:local</c> with no image folders configured.</exception>
+    /// <exception cref="InvalidDataException"><c>--bg random:local</c> and the settings file is invalid.</exception>
+    internal static IReadOnlyList<string> LoadImageDirectories(
+        string? background, Func<UserSettingsStore> createStore, TextWriter warnings)
+    {
+        if (!RandomBackgroundSpec.IsRandom(background))
+            return [];
+
+        var spec = RandomBackgroundSpec.Parse(background!);
+        var localOnly = spec.ProviderName == RandomBackgroundSpec.Local;
+        if (!spec.IsDefault && !localOnly)
+            return [];
+        List<string> directories;
+        try
+        {
+            directories = UserSetting.ImageDirectories.GetValues(createStore().Load());
+        }
+        catch (Exception ex) when (!localOnly && ex is InvalidDataException or InvalidOperationException or IOException or UnauthorizedAccessException)
+        {
+            // Plain --bg random still works without local folders.
+            warnings.WriteLine($"Warning: couldn't read your image folders, so they won't be used: {ex.Message}");
+            return [];
+        }
+
+        if (localOnly && directories.Count == 0)
+        {
+            throw new ArgumentException(
+                $"Invalid --bg value \"{background!.Trim()}\": no image folders are configured. " +
+                "Add one with 'imgforge config add image-directories <folder>'.");
+        }
+
+        return directories;
     }
 
     internal static (int Width, int Height)? ResolvePresetDimensions(string? format) =>

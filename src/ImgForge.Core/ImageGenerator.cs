@@ -24,7 +24,19 @@ public class ImageGenerator(TemplateRenderer renderer)
     /// <see cref="RandomBackgroundResolver.DownloadTimeout"/> and <see cref="RandomBackgroundResolver.TempDirectory"/>
     /// also apply to <c>--bg random:&lt;provider&gt;</c>.
     /// </summary>
-    internal RandomBackgroundResolver RandomBackgrounds { get; set; } = new();
+    internal RandomBackgroundResolver RandomBackgrounds
+    {
+        get => _randomBackgrounds ??= new RandomBackgroundResolver(ImageDirectories);
+        set => _randomBackgrounds = value;
+    }
+
+    private RandomBackgroundResolver? _randomBackgrounds;
+
+    /// <summary>
+    /// Local folders that <c>--bg random</c> picks images from (after the online photo providers, before the
+    /// solid-color placeholder) and that <c>--bg random:local</c> uses on its own: the <c>image-directories</c> setting.
+    /// </summary>
+    public IReadOnlyList<string> ImageDirectories { get; init; } = [];
 
     public async Task<string> GenerateAsync(GenerateOptions opts)
     {
@@ -38,7 +50,12 @@ public class ImageGenerator(TemplateRenderer renderer)
                 var spec = RandomBackgroundSpec.Parse(opts.Background!);
                 // Report a bad --template before spending time on (or failing) a download.
                 TemplateRenderer.EnsureTemplateExists(opts.Template);
-                var resolved = await ResolverFor(spec).ResolveToFileAsync(opts.Width, opts.Height);
+                var resolver = ResolverFor(spec);
+                // Local images are resized with Chromium. Download it (first run only) now, so the download doesn't
+                // count against the resolver's per-provider time limit.
+                if (resolver.Providers.Any(p => p is LocalImageProvider))
+                    await EnsureBrowserAsync();
+                var resolved = await resolver.ResolveToFileAsync(opts.Width, opts.Height);
                 randomBackgroundFile = resolved.Path;
                 if (resolved.Failures.Count > 0)
                     await Warnings.WriteLineAsync(RandomBackgroundResolver.BuildFallbackWarning(resolved));
@@ -63,7 +80,7 @@ public class ImageGenerator(TemplateRenderer renderer)
     /// <c>--bg random:&lt;provider&gt;</c>.
     /// </summary>
     internal RandomBackgroundResolver ResolverFor(RandomBackgroundSpec spec) =>
-        spec.CreateProvider() is { } provider
+        spec.CreateProvider(imageDirectories: ImageDirectories) is { } provider
             ? new RandomBackgroundResolver(provider)
             {
                 BackgroundOption = spec.OptionText,
@@ -78,12 +95,7 @@ public class ImageGenerator(TemplateRenderer renderer)
 
         await EnsureBrowserAsync();
 
-        var launchOptions = new LaunchOptions
-        {
-            Headless = true,
-            Args = RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ? ["--no-sandbox"] : []
-        };
-        await using var browser = await Puppeteer.LaunchAsync(launchOptions);
+        await using var browser = await Puppeteer.LaunchAsync(CreateLaunchOptions());
         var page = await browser.NewPageAsync();
         await page.SetViewportAsync(new ViewPortOptions { Width = opts.Width, Height = opts.Height });
 
@@ -249,7 +261,15 @@ public class ImageGenerator(TemplateRenderer renderer)
     private static readonly SemaphoreSlim BrowserDownloadLock = new(1, 1);
     private static volatile bool _browserReady;
 
-    private static async Task EnsureBrowserAsync()
+    /// <summary>How ImgForge starts headless Chromium (for rendering, and for resizing local images).</summary>
+    internal static LaunchOptions CreateLaunchOptions() => new()
+    {
+        Headless = true,
+        Args = RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ? ["--no-sandbox"] : []
+    };
+
+    /// <summary>Downloads the Chromium build PuppeteerSharp launches, if it isn't installed yet.</summary>
+    internal static async Task EnsureBrowserAsync()
     {
         if (_browserReady) return;
 

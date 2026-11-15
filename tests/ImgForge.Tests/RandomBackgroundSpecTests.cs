@@ -82,7 +82,7 @@ public class RandomBackgroundSpecTests
 
         Assert.Equal(
             "Invalid --bg value \"random:flickr\": unknown provider \"flickr\". " +
-            "Valid providers: picsum, loremflickr, placeholder, unsplash, pexels, pixabay (for example: --bg random:picsum).",
+            "Valid providers: picsum, loremflickr, placeholder, unsplash, pexels, pixabay, local (for example: --bg random:picsum).",
             ex.Message);
     }
 
@@ -306,5 +306,58 @@ public class RandomBackgroundSpecTests
         var ex = Assert.Throws<ArgumentException>(() => GenerateCommand.ValidateBackground("random:bogus"));
 
         Assert.Contains("Valid providers: picsum, loremflickr, placeholder", ex.Message);
+    }
+
+    // ---- local ----
+
+    [Theory]
+    [InlineData("random:local")]
+    [InlineData(" Random:LOCAL ")]
+    public void Parse_Local_SelectsLocalFolders(string background)
+    {
+        var spec = RandomBackgroundSpec.Parse(background);
+
+        Assert.Equal(RandomBackgroundSpec.Local, spec.ProviderName);
+        Assert.Null(spec.Option);
+        Assert.Equal("--bg random:local", spec.OptionText);
+    }
+
+    [Fact]
+    public void Parse_LocalWithOption_Throws()
+    {
+        var ex = Assert.Throws<ArgumentException>(() => RandomBackgroundSpec.Parse("random:local:photos"));
+
+        Assert.Equal("Invalid --bg value \"random:local:photos\": local doesn't take an option. Use \"random:local\".", ex.Message);
+    }
+
+    [Fact]
+    public void CreateProvider_Local_UsesGivenImageDirectories()
+    {
+        var provider = RandomBackgroundSpec.Parse("random:local").CreateProvider(imageDirectories: ["/pics"]);
+
+        Assert.Equal(["/pics"], Assert.IsType<LocalImageProvider>(provider).Directories);
+    }
+
+    [Fact]
+    public void ResolverFor_Local_UsesOnlyLocalFolders()
+    {
+        var generator = new ImageGenerator(new TemplateRenderer()) { ImageDirectories = ["/pics"] };
+
+        var resolver = generator.ResolverFor(RandomBackgroundSpec.Parse("random:local"));
+
+        var provider = Assert.Single(resolver.Providers);
+        Assert.Equal(["/pics"], Assert.IsType<LocalImageProvider>(provider).Directories);
+        Assert.Equal("--bg random:local", resolver.BackgroundOption);
+    }
+
+    [Fact]
+    public void DefaultResolver_IncludesImageDirectoriesFromGenerator()
+    {
+        var generator = new ImageGenerator(new TemplateRenderer()) { ImageDirectories = ["/pics"] };
+
+        var resolver = generator.ResolverFor(RandomBackgroundSpec.Default);
+
+        Assert.Contains(resolver.Providers, p => p is LocalImageProvider);
+        Assert.IsType<PlaceholderProvider>(resolver.Providers[^1]);
     }
 }

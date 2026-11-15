@@ -24,8 +24,9 @@ internal static class Cli
     /// <param name="settingsStore">The user settings store; defaults to <see cref="UserSettingsStore.CreateDefault"/>. Tests pass a temp folder.</param>
     internal static Parser BuildParser(UserSettingsStore? settingsStore = null)
     {
-        var generate = GenerateCommand.Build();
-        var config = ConfigCommand.Build(() => settingsStore ?? UserSettingsStore.CreateDefault());
+        UserSettingsStore CreateStore() => settingsStore ?? UserSettingsStore.CreateDefault();
+        var generate = GenerateCommand.Build(CreateStore);
+        var config = ConfigCommand.Build(CreateStore);
         var root = new RootCommand("ImgForge — generate images from HTML templates") { generate, config };
         root.Name = ToolName;
 

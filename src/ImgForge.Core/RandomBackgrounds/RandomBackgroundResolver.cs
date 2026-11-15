@@ -18,18 +18,22 @@ internal sealed class RandomBackgroundResolver
     /// Uses the default provider order (see <see cref="DefaultProviders"/>), starting with each API provider whose key
     /// is set (<c>UNSPLASH_ACCESS_KEY</c>, <c>PEXELS_API_KEY</c>, <c>PIXABAY_API_KEY</c>).
     /// </summary>
-    public RandomBackgroundResolver() : this(DefaultProviders(
+    /// <param name="imageDirectories">Local image folders to fall back to before the placeholder; none by default.</param>
+    public RandomBackgroundResolver(IEnumerable<string>? imageDirectories = null) : this(DefaultProviders(
         UnsplashProvider.AccessKeyFromEnvironment(),
         PexelsProvider.ApiKeyFromEnvironment(),
-        PixabayProvider.ApiKeyFromEnvironment()))
+        PixabayProvider.ApiKeyFromEnvironment(),
+        imageDirectories))
     { }
 
     /// <summary>
-    /// The default provider order: Unsplash, Pexels, and Pixabay (each only when its key is given), picsum.photos, then
-    /// a solid-color placeholder from placehold.co as the last resort.
+    /// The default provider order: Unsplash, Pexels, and Pixabay (each only when its key is given), picsum.photos,
+    /// images from the local <paramref name="imageDirectories"/> (only when at least one is given), then a solid-color
+    /// placeholder from placehold.co as the last resort.
     /// </summary>
     internal static IEnumerable<IRandomBackgroundProvider> DefaultProviders(
-        string? unsplashAccessKey, string? pexelsApiKey = null, string? pixabayApiKey = null)
+        string? unsplashAccessKey, string? pexelsApiKey = null, string? pixabayApiKey = null,
+        IEnumerable<string>? imageDirectories = null, IImageResizer? resizer = null)
     {
         if (!string.IsNullOrWhiteSpace(unsplashAccessKey))
             yield return new UnsplashProvider(unsplashAccessKey);
@@ -38,6 +42,9 @@ internal sealed class RandomBackgroundResolver
         if (!string.IsNullOrWhiteSpace(pixabayApiKey))
             yield return new PixabayProvider(pixabayApiKey);
         yield return new PicsumProvider();
+        var local = new LocalImageProvider(imageDirectories ?? [], resizer);
+        if (local.Directories.Count > 0)
+            yield return local;
         yield return new PlaceholderProvider();
     }
 
@@ -107,7 +114,9 @@ internal sealed class RandomBackgroundResolver
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested && timeout.IsCancellationRequested)
         {
-            return (null, $"the image did not finish downloading within {HttpImageDownloader.FormatSeconds(DownloadTimeout)}");
+            return (null, provider is LocalImageProvider
+                ? $"the image could not be found and resized within {HttpImageDownloader.FormatSeconds(DownloadTimeout)}"
+                : $"the image did not finish downloading within {HttpImageDownloader.FormatSeconds(DownloadTimeout)}");
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
@@ -162,7 +171,11 @@ internal sealed class RandomBackgroundResolver
         }
 
         lines.Add("You can:");
-        lines.Add("  - Check your network connection, then try again later.");
+        if (failures.Any(f => f.ProviderName != LocalImageProvider.ProviderName))
+            lines.Add("  - Check your network connection, then try again later.");
+        if (failures.Any(f => f.ProviderName == LocalImageProvider.ProviderName))
+            lines.Add("  - Check your image folders with 'imgforge config show' " +
+                "(add one with 'imgforge config add image-directories <folder>').");
         if (backgroundOption != RandomBackgroundSpec.DefaultOptionText)
             lines.Add($"  - Use {RandomBackgroundSpec.DefaultOptionText} to try each provider in turn instead of only this one.");
         lines.Add("  - Pass a different background with --bg (a local image file or another URL), " +
