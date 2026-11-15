@@ -84,7 +84,10 @@ public class CliHelpTests
         var help = await HelpAsync("--help");
 
         Assert.Contains("imgforge [command] [options]", help);
-        Assert.Contains($"generate  Generate an image from an HTML template.{Environment.NewLine}{Environment.NewLine}Examples:", help);
+        Assert.Contains("  generate  Generate an image from an HTML template.", help);
+        Assert.Contains("  config    View, change, or clear your ImgForge settings", help);
+        // A blank line separates the Commands section from Examples.
+        Assert.Contains($".{Environment.NewLine}{Environment.NewLine}Examples:", help);
         foreach (var example in Cli.RootExamples)
             Assert.Contains($"  # {example.Description}{Environment.NewLine}  imgforge {example.Arguments}", help);
         Assert.Contains("imgforge generate --help", help);
@@ -95,6 +98,38 @@ public class CliHelpTests
     {
         foreach (var example in Cli.RootExamples)
             Assert.Empty(Cli.BuildParser().Parse(example.Arguments).Errors);
+    }
+
+    [Fact]
+    public async Task ConfigHelp_ListsSubcommandsAndEndsWithEveryExample()
+    {
+        var help = await HelpAsync("config", "--help");
+
+        foreach (var subcommand in new[] { "show", "path", "add", "remove", "clear" })
+            Assert.Contains($"  {subcommand}", help);
+        Assert.Contains("~/.imgforge/settings.json", help);
+        Assert.Contains("IMGFORGE_CONFIG_DIR", help);
+
+        var examplesAt = help.IndexOf("Examples:", StringComparison.Ordinal);
+        Assert.True(examplesAt > help.IndexOf("Commands:", StringComparison.Ordinal), help);
+        foreach (var example in ConfigCommand.Examples)
+            Assert.Contains($"  # {example.Description}{Environment.NewLine}  imgforge {example.Arguments}", help);
+    }
+
+    [Fact]
+    public void ConfigExamples_ParseWithoutErrorsAndUseEverySubcommand()
+    {
+        var used = new HashSet<string>();
+        foreach (var example in ConfigCommand.Examples)
+        {
+            var result = Cli.BuildParser().Parse(example.Arguments);
+            Assert.Empty(result.Errors);
+            Assert.Equal("config", result.CommandResult.Parent?.Symbol.Name);
+            used.Add(result.CommandResult.Command.Name);
+        }
+
+        // "path" just prints the location; "show" covers that in the examples.
+        Assert.Equal(["show", "add", "remove", "clear"], used);
     }
 
     [Fact]
