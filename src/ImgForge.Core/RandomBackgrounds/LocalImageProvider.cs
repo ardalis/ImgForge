@@ -64,7 +64,19 @@ internal sealed class LocalImageProvider : IRandomBackgroundProvider
     /// How long reading the chosen file may take. The file is read once before it's resized, so an online-only file in a
     /// cloud folder (e.g. Dropbox) is downloaded on demand here, with its own time limit, instead of inside Chromium.
     /// </summary>
-    public TimeSpan ReadTimeout { get; init; } = DefaultReadTimeout;
+    public TimeSpan ReadTimeout
+    {
+        get;
+        init
+        {
+            ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(value, TimeSpan.Zero);
+            ArgumentOutOfRangeException.ThrowIfGreaterThan(value, MaxReadTimeout);
+            field = value;
+        }
+    } = DefaultReadTimeout;
+
+    /// <summary>The longest allowed <see cref="ReadTimeout"/>.</summary>
+    internal static readonly TimeSpan MaxReadTimeout = TimeSpan.FromHours(1);
 
     /// <summary>Reads the whole file at the given path; replaceable in tests. See <see cref="ReadWholeFileAsync"/>.</summary>
     internal Func<string, CancellationToken, Task> ReadFile { get; init; } = ReadWholeFileAsync;
@@ -223,20 +235,25 @@ internal sealed class LocalImageProvider : IRandomBackgroundProvider
         new(directory, (ref FileSystemEntry entry) => (FileInfo)entry.ToFileSystemInfo(), SearchOptions)
         {
             ShouldIncludePredicate = (ref FileSystemEntry entry) => !entry.IsDirectory,
-            ShouldRecursePredicate = (ref FileSystemEntry entry) => ShouldRecurseInto(entry.Attributes, entry.ToFullPath()),
+            ShouldRecursePredicate = (ref FileSystemEntry entry) =>
+                (entry.Attributes & FileAttributes.ReparsePoint) == 0 || ShouldRecurseInto(entry.Attributes, entry.ToFullPath()),
         };
 
     /// <summary>
-    /// True for a folder that should be searched: any folder except a symbolic link or junction. Other reparse points
-    /// are searched, since Windows cloud folders (Dropbox, OneDrive online-only placeholders) can be reparse points
-    /// that aren't links. Reading a folder's link target only reads its metadata, so it doesn't download anything.
+    /// True for a folder that should be searched: any folder except a link to another folder (a symbolic link,
+    /// junction, or WSL symlink). Windows cloud folders (Dropbox, OneDrive online-only placeholders) can be reparse
+    /// points that aren't links, so they're searched. Only metadata is read, so nothing is downloaded. A reparse point
+    /// whose kind can't be read isn't searched.
     /// </summary>
     internal static bool ShouldRecurseInto(FileAttributes attributes, string fullPath)
     {
         if ((attributes & FileAttributes.ReparsePoint) == 0)
             return true;
+        if (OperatingSystem.IsWindows())
+            return WindowsReparsePoints.GetReparseTag(fullPath) is { } tag && !WindowsReparsePoints.IsNameSurrogate(tag);
         try
         {
+            // On Linux and macOS a reparse point is a symbolic link.
             return new DirectoryInfo(fullPath).LinkTarget is null;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -253,8 +270,9 @@ internal sealed class LocalImageProvider : IRandomBackgroundProvider
     {
         try
         {
-            // Only reparse points can be links; skipping the check for other files avoids opening each one. Length comes
-            // from the folder listing, and online-only cloud files report their real size, so nothing is downloaded.
+            // Only reparse points can be links; skipping the check for other files avoids opening each one. (On Windows,
+            // online-only cloud files are reparse points, so each costs one metadata-only open.) Length comes from the
+            // folder listing, and online-only cloud files report their real size, so nothing is downloaded.
             var isLink = (file.Attributes & FileAttributes.ReparsePoint) != 0 && file.LinkTarget is not null;
             var target = isLink ? file.ResolveLinkTarget(returnFinalTarget: true) as FileInfo : file;
             return target is { Exists: true, Length: > 0 and <= HttpImageDownloader.MaxImageBytes };

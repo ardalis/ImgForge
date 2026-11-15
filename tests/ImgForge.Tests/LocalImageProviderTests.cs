@@ -241,6 +241,46 @@ public class LocalImageProviderTests : IDisposable
     }
 
     [Theory]
+    [InlineData(0x9000001Au, false)] // IO_REPARSE_TAG_CLOUD (Dropbox / OneDrive placeholders)
+    [InlineData(0x9000301Au, false)] // IO_REPARSE_TAG_CLOUD_3
+    [InlineData(0x9000001Cu, false)] // IO_REPARSE_TAG_PROJFS
+    [InlineData(0x80000021u, false)] // IO_REPARSE_TAG_ONEDRIVE
+    [InlineData(0x80000013u, false)] // IO_REPARSE_TAG_DEDUP
+    [InlineData(0xA000000Cu, true)] // IO_REPARSE_TAG_SYMLINK
+    [InlineData(0xA0000003u, true)] // IO_REPARSE_TAG_MOUNT_POINT (junction)
+    [InlineData(0xA000001Du, true)] // IO_REPARSE_TAG_LX_SYMLINK (WSL)
+    [InlineData(0xA0000027u, true)] // IO_REPARSE_TAG_WCI_LINK
+    public void IsNameSurrogate_LinksOnly(uint tag, bool isLink)
+    {
+        Assert.Equal(isLink, WindowsReparsePoints.IsNameSurrogate(tag));
+    }
+
+    [Fact]
+    public void ShouldRecurseInto_JunctionOnWindows_IsNotFollowed()
+    {
+        if (!OperatingSystem.IsWindows())
+            return;
+        var target = Folder("target");
+        var junction = Path.Combine(_root, "junction");
+        using (var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(
+            "cmd.exe", $"/c mklink /J \"{junction}\" \"{target}\"")
+        { UseShellExecute = false, CreateNoWindow = true })!)
+            process.WaitForExit();
+        if (!Directory.Exists(junction))
+            return;
+
+        Assert.False(LocalImageProvider.ShouldRecurseInto(new DirectoryInfo(junction).Attributes, junction));
+    }
+
+    [Fact]
+    public void ReadTimeout_MustBePositiveAndFinite()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => new LocalImageProvider([]) { ReadTimeout = TimeSpan.Zero });
+        Assert.Throws<ArgumentOutOfRangeException>(() => new LocalImageProvider([]) { ReadTimeout = Timeout.InfiniteTimeSpan });
+        Assert.Throws<ArgumentOutOfRangeException>(() => new LocalImageProvider([]) { ReadTimeout = TimeSpan.MaxValue });
+    }
+
+    [Theory]
     [InlineData(FileAttributes.Offline)]
     [InlineData((FileAttributes)0x00400000)] // FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS (online-only cloud file)
     [InlineData((FileAttributes)0x00040000)] // FILE_ATTRIBUTE_RECALL_ON_OPEN

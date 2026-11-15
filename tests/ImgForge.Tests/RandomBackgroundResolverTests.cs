@@ -218,7 +218,11 @@ public class RandomBackgroundResolverTests
         try
         {
             File.WriteAllBytes(Path.Combine(dir, "a.jpg"), [1]);
-            var provider = new LocalImageProvider([dir], new HangingResizer()) { ReadTimeout = TimeSpan.FromMilliseconds(100) };
+            var provider = new LocalImageProvider([dir], new HangingResizer())
+            {
+                ReadTimeout = TimeSpan.FromMilliseconds(100),
+                ReadFile = (_, _) => Task.CompletedTask
+            };
             var resolver = new RandomBackgroundResolver(provider) { DownloadTimeout = TimeSpan.FromMilliseconds(200) };
 
             var ex = await Assert.ThrowsAsync<ImageLoadException>(() => resolver.ResolveToFileAsync(100, 100));
