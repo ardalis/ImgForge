@@ -251,20 +251,17 @@ a different folder. The file is created the first time you change a setting.
 | Setting | Values |
 |---|---|
 | `image-directories` | Local folders to pick images from (stored as full paths) |
-| `dropbox-folders` | Dropbox shared-folder HTTP(S) URLs (stored only; not used, see below) |
 | `templates` | Template files or folders (stored as full paths) |
 
 `generate` reads `image-directories` for `--bg random` and `--bg random:local` (see
-[Local image folders](#local-image-folders)). `dropbox-folders` and `templates` are only stored for now. Reading Dropbox folders over the web
-isn't planned ([#42](https://github.com/ardalis/ImgForge/issues/42)); use a synced Dropbox folder as an
-[image folder](#local-image-folders) instead. If the settings file
-can't be read, plain `--bg random` warns and carries on without your folders.
+[Local image folders](#local-image-folders)). `templates` is only stored for now. To use photos from Dropbox, add a
+synced Dropbox folder as an [image folder](#local-image-folders). If the settings file can't be read, plain
+`--bg random` warns and carries on without your folders.
 
 ```bash
 imgforge config show                                   # settings file location and current settings as JSON
 imgforge config path                                   # just the settings file path
 imgforge config add image-directories ~/Pictures/backgrounds
-imgforge config add dropbox-folders https://www.dropbox.com/scl/fo/abc123/xyz
 imgforge config remove image-directories ~/Pictures/backgrounds
 imgforge config clear image-directories                # empty one setting
 imgforge config clear                                  # delete the settings file (all settings)
@@ -274,8 +271,9 @@ Relative paths are stored as full paths, so they keep working from any folder. `
 path doesn't exist yet. You can also edit the file by hand; settings ImgForge doesn't recognize are kept when it
 rewrites the file. If the file isn't valid JSON, `imgforge config clear` deletes it so you can start over.
 
-Dropbox shared links can include an access key (`rlkey=...`). It's stored as typed in the settings file and printed by
-`config show`, so treat the file like any other credential in your profile.
+Earlier versions had a `dropbox-folders` setting that was never used; it has been removed. A `dropboxFolders` entry
+left in an existing settings file is ignored and isn't shown by `config show`. It's deleted the next time ImgForge
+saves the file, or run `imgforge config clear` to delete the whole file now.
 
 ## Image Dimension Reference
 

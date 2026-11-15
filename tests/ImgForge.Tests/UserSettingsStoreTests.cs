@@ -51,8 +51,8 @@ public class UserSettingsStoreTests
 
         Assert.False(temp.Store.Exists);
         Assert.Empty(settings.ImageDirectories);
-        Assert.Empty(settings.DropboxFolders);
         Assert.Empty(settings.Templates);
+        Assert.False(settings.HadRemovedSettings);
     }
 
     [Fact]
@@ -62,7 +62,6 @@ public class UserSettingsStoreTests
         var saved = new UserSettings
         {
             ImageDirectories = ["/images/a", "/images/b"],
-            DropboxFolders = ["https://www.dropbox.com/scl/fo/abc"],
             Templates = ["/templates/podcast.html"],
         };
 
@@ -71,7 +70,6 @@ public class UserSettingsStoreTests
 
         Assert.True(temp.Store.Exists);
         Assert.Equal(saved.ImageDirectories, loaded.ImageDirectories);
-        Assert.Equal(saved.DropboxFolders, loaded.DropboxFolders);
         Assert.Equal(saved.Templates, loaded.Templates);
         Assert.Equal([temp.Store.FilePath], Directory.GetFiles(temp.Store.Directory));
     }
@@ -85,7 +83,7 @@ public class UserSettingsStoreTests
 
         using var json = JsonDocument.Parse(File.ReadAllText(temp.Store.FilePath));
         Assert.Equal("/images", json.RootElement.GetProperty("imageDirectories")[0].GetString());
-        Assert.Equal(0, json.RootElement.GetProperty("dropboxFolders").GetArrayLength());
+        Assert.False(json.RootElement.TryGetProperty("dropboxFolders", out _));
         Assert.Equal(0, json.RootElement.GetProperty("templates").GetArrayLength());
         Assert.Contains(Environment.NewLine + "  \"imageDirectories\"", File.ReadAllText(temp.Store.FilePath));
     }
@@ -121,7 +119,44 @@ public class UserSettingsStoreTests
 
         Assert.Equal(["/a"], settings.ImageDirectories);
         Assert.Empty(settings.Templates);
-        Assert.Empty(settings.DropboxFolders);
+    }
+
+    [Theory]
+    [InlineData("dropboxFolders")]
+    [InlineData("DropboxFolders")]
+    public void Load_RemovedDropboxFoldersSetting_LoadsAndDropsIt(string propertyName)
+    {
+        using var temp = new TempSettingsDirectory();
+        temp.WriteSettingsFile($$"""
+            {
+              "imageDirectories": ["/a"],
+              "{{propertyName}}": ["https://www.dropbox.com/scl/fo/abc?rlkey=secret"],
+              "futureSetting": 1
+            }
+            """);
+
+        var settings = temp.Store.Load();
+
+        Assert.True(settings.HadRemovedSettings);
+        Assert.Equal(["/a"], settings.ImageDirectories);
+        Assert.DoesNotContain(propertyName, settings.AdditionalProperties!.Keys);
+        Assert.Contains("futureSetting", settings.AdditionalProperties.Keys);
+        Assert.DoesNotContain("rlkey", UserSettingsStore.ToJson(settings));
+    }
+
+    [Fact]
+    public void Save_AfterLoadingRemovedSetting_RemovesItFromFile()
+    {
+        using var temp = new TempSettingsDirectory();
+        temp.WriteSettingsFile("""{ "dropboxFolders": ["https://www.dropbox.com/scl/fo/abc?rlkey=secret"], "templates": ["/t"] }""");
+
+        temp.Store.Save(temp.Store.Load());
+
+        var json = File.ReadAllText(temp.Store.FilePath);
+        Assert.DoesNotContain("dropboxFolders", json);
+        Assert.DoesNotContain("rlkey", json);
+        Assert.Equal(["/t"], temp.Store.Load().Templates);
+        Assert.False(temp.Store.Load().HadRemovedSettings);
     }
 
     [Fact]

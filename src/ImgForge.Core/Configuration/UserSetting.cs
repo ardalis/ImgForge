@@ -34,14 +34,6 @@ public sealed class UserSetting
         (s, v) => s.ImageDirectories = v,
         NormalizePath);
 
-    public static UserSetting DropboxFolders { get; } = new(
-        "dropbox-folders",
-        "Dropbox shared-folder URLs to pick images from",
-        isPath: false,
-        s => s.DropboxFolders,
-        (s, v) => s.DropboxFolders = v,
-        NormalizeHttpUrl);
-
     public static UserSetting Templates { get; } = new(
         "templates",
         "template files or folders",
@@ -51,7 +43,7 @@ public sealed class UserSetting
         NormalizePath);
 
     /// <summary>Every setting, in the order shown to users.</summary>
-    public static IReadOnlyList<UserSetting> All { get; } = [ImageDirectories, DropboxFolders, Templates];
+    public static IReadOnlyList<UserSetting> All { get; } = [ImageDirectories, Templates];
 
     /// <summary>The command-line name, e.g. <c>image-directories</c>.</summary>
     public string Name { get; }
@@ -61,12 +53,22 @@ public sealed class UserSetting
     /// <summary>True when values are file system paths (stored as full paths).</summary>
     public bool IsPath { get; }
 
+    /// <summary>The command-line name of the removed Dropbox shared-folder setting (#49).</summary>
+    public const string RemovedDropboxFoldersName = "dropbox-folders";
+
+    /// <summary>Why <c>dropbox-folders</c> can't be used any more, and what to use instead.</summary>
+    public const string RemovedDropboxFoldersMessage =
+        "The dropbox-folders setting was removed: ImgForge can't read Dropbox folders over the web. " +
+        "Sync the folder with the Dropbox desktop app and add its local path instead, " +
+        "e.g. 'imgforge config add image-directories ~/Dropbox/backgrounds'.";
+
     /// <summary>Finds a setting by its command-line name.</summary>
     /// <exception cref="ArgumentException">No setting has that name.</exception>
     public static UserSetting Find(string name) =>
         All.FirstOrDefault(s => s.Name == name)
-        ?? throw new ArgumentException(
-            $"Unknown setting \"{name}\". Valid settings: {string.Join(", ", All.Select(s => s.Name))}.");
+        ?? throw new ArgumentException(name == RemovedDropboxFoldersName
+            ? RemovedDropboxFoldersMessage
+            : $"Unknown setting \"{name}\". Valid settings: {string.Join(", ", All.Select(s => s.Name))}.");
 
     /// <summary>The setting's values in <paramref name="settings"/> (never null; a missing list is created).</summary>
     public List<string> GetValues(UserSettings settings)
@@ -80,7 +82,7 @@ public sealed class UserSetting
         return values;
     }
 
-    /// <summary>Checks a value and puts it in its stored form (full path, trimmed URL).</summary>
+    /// <summary>Checks a value and puts it in its stored form (e.g. a full path).</summary>
     /// <exception cref="ArgumentException">The value isn't valid for this setting.</exception>
     public string Normalize(string value)
     {
@@ -134,12 +136,5 @@ public sealed class UserSetting
         {
             throw new ArgumentException($"\"{path}\" isn't a valid path: {ex.Message}", ex);
         }
-    }
-
-    private static string NormalizeHttpUrl(string url)
-    {
-        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || (uri.Scheme != Uri.UriSchemeHttps && uri.Scheme != Uri.UriSchemeHttp))
-            throw new ArgumentException($"\"{url}\" isn't an HTTP(S) URL. Use a Dropbox shared-folder link such as https://www.dropbox.com/scl/fo/....");
-        return url;
     }
 }

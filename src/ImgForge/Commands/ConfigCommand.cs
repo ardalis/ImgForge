@@ -15,7 +15,6 @@ internal static class ConfigCommand
     [
         new("Show the settings file location and current settings", "config show"),
         new("Add a local image folder", "config add image-directories ~/Pictures/backgrounds"),
-        new("Add a Dropbox shared folder", "config add dropbox-folders https://www.dropbox.com/scl/fo/abc123/xyz"),
         new("Remove a template", "config remove templates ./my-template"),
         new("Clear one setting", "config clear image-directories"),
         new("Delete all settings", "config clear"),
@@ -36,6 +35,12 @@ internal static class ConfigCommand
         show.SetHandler(context => Run(context, createStore, (store, console) =>
         {
             var settings = store.Load();
+            if (settings.HadRemovedSettings)
+            {
+                console.Error.WriteLine(
+                    "Note: the settings file has settings ImgForge no longer uses (such as dropboxFolders). They're ignored and " +
+                    "will be removed the next time ImgForge saves the file, or run 'imgforge config clear' to delete the whole file now.");
+            }
             console.Out.WriteLine(store.Exists
                 ? $"Settings file: {store.FilePath}"
                 : $"Settings file: {store.FilePath} (not created yet)");
@@ -46,7 +51,7 @@ internal static class ConfigCommand
         path.SetHandler(context => Run(context, createStore, (store, console) => console.Out.WriteLine(store.FilePath)));
 
         var addSetting = SettingArgument();
-        var addValue = new Argument<string>("value", "The folder, URL, or template path to add. Paths are stored as full paths.");
+        var addValue = new Argument<string>("value", "The folder or template path to add. Paths are stored as full paths.");
         var add = new Command("add", "Add a value to a setting.") { addSetting, addValue };
         add.SetHandler(context => Run(context, createStore, (store, console) =>
         {
@@ -129,9 +134,21 @@ internal static class ConfigCommand
         return config;
     }
 
-    private static Argument<string> SettingArgument() =>
-        new Argument<string>("setting", $"The setting to change: {string.Join(", ", SettingNames)}.") { HelpName = "setting" }
-            .FromAmong(SettingNames);
+    private static Argument<string> SettingArgument()
+    {
+        var argument = new Argument<string>("setting", $"The setting to change: {string.Join(", ", SettingNames)}.") { HelpName = "setting" };
+        argument.AddCompletions(SettingNames);
+        argument.AddValidator(result =>
+        {
+            var value = result.GetValueOrDefault<string>();
+            if (value is null || SettingNames.Contains(value))
+                return;
+            result.ErrorMessage = value == UserSetting.RemovedDropboxFoldersName
+                ? UserSetting.RemovedDropboxFoldersMessage
+                : result.LocalizationResources.UnrecognizedArgument(value, SettingNames);
+        });
+        return argument;
+    }
 
     private static void Run(InvocationContext context, Func<UserSettingsStore> createStore, Action<UserSettingsStore, IConsole> action)
     {

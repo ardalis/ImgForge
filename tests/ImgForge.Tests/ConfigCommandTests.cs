@@ -21,7 +21,7 @@ public sealed class ConfigCommandTests : IDisposable
         Assert.Empty(stderr);
         Assert.Contains($"Settings file: {Store.FilePath} (not created yet)", stdout);
         Assert.Contains("\"imageDirectories\": []", stdout);
-        Assert.Contains("\"dropboxFolders\": []", stdout);
+        Assert.DoesNotContain("dropbox", stdout, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("\"templates\": []", stdout);
         Assert.False(Store.Exists);
     }
@@ -29,13 +29,75 @@ public sealed class ConfigCommandTests : IDisposable
     [Fact]
     public async Task Show_WithSettings_ShowsValues()
     {
-        Store.Save(new UserSettings { DropboxFolders = ["https://www.dropbox.com/scl/fo/abc"] });
+        Store.Save(new UserSettings { Templates = ["/my/template"] });
 
-        var (exitCode, stdout, _) = await InvokeAsync("config", "show");
+        var (exitCode, stdout, stderr) = await InvokeAsync("config", "show");
 
         Assert.Equal(0, exitCode);
+        Assert.Empty(stderr);
         Assert.Contains($"Settings file: {Store.FilePath}{Environment.NewLine}", stdout);
-        Assert.Contains("\"https://www.dropbox.com/scl/fo/abc\"", stdout);
+        Assert.Contains("\"/my/template\"", stdout);
+    }
+
+    [Fact]
+    public async Task Show_FileWithRemovedDropboxFolders_HidesValuesAndExplains()
+    {
+        _temp.WriteSettingsFile("""{ "dropboxFolders": ["https://www.dropbox.com/scl/fo/abc?rlkey=secret"], "templates": ["/t"] }""");
+
+        var (exitCode, stdout, stderr) = await InvokeAsync("config", "show");
+
+        Assert.Equal(0, exitCode);
+        Assert.DoesNotContain("dropbox", stdout, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("\"/t\"", stdout);
+        Assert.Contains("no longer uses (such as dropboxFolders)", stderr);
+        Assert.Contains("'imgforge config clear'", stderr);
+    }
+
+    [Theory]
+    [InlineData("add", "dropbox-folders", "https://www.dropbox.com/scl/fo/abc")]
+    [InlineData("remove", "dropbox-folders", "https://www.dropbox.com/scl/fo/abc")]
+    [InlineData("clear", "dropbox-folders")]
+    public async Task RemovedDropboxFoldersSetting_FailsPointingToImageDirectories(params string[] args)
+    {
+        _temp.WriteSettingsFile("""{ "dropboxFolders": ["https://www.dropbox.com/scl/fo/abc"] }""");
+        var before = File.ReadAllText(Store.FilePath);
+
+        var (exitCode, _, stderr) = await InvokeAsync(["config", .. args]);
+
+        Assert.Equal(1, exitCode);
+        Assert.Contains("The dropbox-folders setting was removed", stderr);
+        Assert.Contains("imgforge config add image-directories", stderr);
+        Assert.DoesNotContain("not recognized", stderr);
+        Assert.Equal(before, File.ReadAllText(Store.FilePath));
+    }
+
+    [Theory]
+    [InlineData("add")]
+    [InlineData("remove")]
+    [InlineData("clear")]
+    public void SettingArgument_CompletesValidSettingNamesOnly(string subcommand)
+    {
+        var completions = Cli.BuildParser(Store).Parse($"config {subcommand} ")
+            .GetCompletions($"config {subcommand} ".Length)
+            .Select(c => c.Label)
+            .ToList();
+
+        Assert.Contains("image-directories", completions);
+        Assert.Contains("templates", completions);
+        Assert.DoesNotContain("dropbox-folders", completions);
+    }
+
+    [Fact]
+    public async Task Add_AfterRemovedDropboxFolders_DropsThemFromFile()
+    {
+        _temp.WriteSettingsFile("""{ "dropboxFolders": ["https://www.dropbox.com/scl/fo/abc?rlkey=secret"] }""");
+
+        var (exitCode, _, _) = await InvokeAsync("config", "add", "templates", "/t");
+
+        Assert.Equal(0, exitCode);
+        var json = File.ReadAllText(Store.FilePath);
+        Assert.DoesNotContain("dropboxFolders", json);
+        Assert.DoesNotContain("rlkey", json);
     }
 
     [Fact]
@@ -95,30 +157,6 @@ public sealed class ConfigCommandTests : IDisposable
     }
 
     [Fact]
-    public async Task Add_DropboxUrl_StoresUrlAsGiven()
-    {
-        const string url = "https://www.dropbox.com/scl/fo/abc123/xyz?rlkey=k&dl=0";
-
-        var (exitCode, _, _) = await InvokeAsync("config", "add", "dropbox-folders", url);
-
-        Assert.Equal(0, exitCode);
-        Assert.Equal([url], Store.Load().DropboxFolders);
-    }
-
-    [Theory]
-    [InlineData("not a url")]
-    [InlineData("ftp://example.com/folder")]
-    [InlineData("/local/path")]
-    public async Task Add_DropboxNonHttpValue_FailsWithoutSaving(string value)
-    {
-        var (exitCode, _, stderr) = await InvokeAsync("config", "add", "dropbox-folders", value);
-
-        Assert.Equal(1, exitCode);
-        Assert.Contains("isn't an HTTP(S) URL", stderr);
-        Assert.False(Store.Exists);
-    }
-
-    [Fact]
     public async Task Add_Duplicate_DoesNotAddTwice()
     {
         var images = Path.Combine(_temp.Root, "images");
@@ -136,7 +174,7 @@ public sealed class ConfigCommandTests : IDisposable
     {
         _temp.WriteSettingsFile("""{ "templates": ["/t"], "extra": true }""");
 
-        await InvokeAsync("config", "add", "dropbox-folders", "https://www.dropbox.com/scl/fo/a");
+        await InvokeAsync("config", "add", "image-directories", "/images");
 
         var json = File.ReadAllText(Store.FilePath);
         Assert.Contains("\"extra\": true", json);
@@ -171,13 +209,13 @@ public sealed class ConfigCommandTests : IDisposable
     [Fact]
     public async Task Remove_MissingValue_Fails()
     {
-        Store.Save(new UserSettings { DropboxFolders = ["https://www.dropbox.com/scl/fo/a"] });
+        Store.Save(new UserSettings { Templates = ["/t/a"] });
 
-        var (exitCode, _, stderr) = await InvokeAsync("config", "remove", "dropbox-folders", "https://www.dropbox.com/scl/fo/b");
+        var (exitCode, _, stderr) = await InvokeAsync("config", "remove", "templates", "/t/b");
 
         Assert.Equal(1, exitCode);
-        Assert.Contains("Error: dropbox-folders doesn't contain 'https://www.dropbox.com/scl/fo/b'.", stderr);
-        Assert.Single(Store.Load().DropboxFolders);
+        Assert.Contains("Error: templates doesn't contain '/t/b'.", stderr);
+        Assert.Single(Store.Load().Templates);
     }
 
     [Fact]
@@ -252,23 +290,15 @@ public sealed class ConfigCommandTests : IDisposable
     }
 
     [Fact]
-    public async Task Remove_HandEditedInvalidUrl_CanStillBeRemoved()
-    {
-        Store.Save(new UserSettings { DropboxFolders = ["junk"] });
-
-        var (exitCode, _, _) = await InvokeAsync("config", "remove", "dropbox-folders", "junk");
-
-        Assert.Equal(0, exitCode);
-        Assert.Empty(Store.Load().DropboxFolders);
-    }
-
-    [Fact]
     public void Find_RejectsUnknownNames()
     {
-        Assert.Same(UserSetting.DropboxFolders, UserSetting.Find("dropbox-folders"));
+        Assert.Same(UserSetting.Templates, UserSetting.Find("templates"));
 
         var ex = Assert.Throws<ArgumentException>(() => UserSetting.Find("nope"));
-        Assert.Contains("image-directories, dropbox-folders, templates", ex.Message);
+        Assert.Contains("Valid settings: image-directories, templates.", ex.Message);
+
+        var removed = Assert.Throws<ArgumentException>(() => UserSetting.Find("dropbox-folders"));
+        Assert.Contains("image-directories", removed.Message);
     }
 
     private async Task<(int ExitCode, string Stdout, string Stderr)> InvokeAsync(params string[] args)
