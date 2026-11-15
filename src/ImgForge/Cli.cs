@@ -3,6 +3,7 @@ using System.CommandLine.Builder;
 using System.CommandLine.Help;
 using System.CommandLine.Parsing;
 using ImgForge.Commands;
+using ImgForge.Core.Configuration;
 
 namespace ImgForge;
 
@@ -17,12 +18,15 @@ internal static class Cli
         new("Blog / Open Graph card with a random background",
             "generate --template blog --title \"My Post Title\" --bg random --format blog"),
         new("Show every generate option and more examples", "generate --help"),
+        new("Show your saved settings (image folders, Dropbox folders, templates)", "config show"),
     ];
 
-    internal static Parser BuildParser()
+    /// <param name="settingsStore">The user settings store; defaults to <see cref="UserSettingsStore.CreateDefault"/>. Tests pass a temp folder.</param>
+    internal static Parser BuildParser(UserSettingsStore? settingsStore = null)
     {
         var generate = GenerateCommand.Build();
-        var root = new RootCommand("ImgForge — generate images from HTML templates") { generate };
+        var config = ConfigCommand.Build(() => settingsStore ?? UserSettingsStore.CreateDefault());
+        var root = new RootCommand("ImgForge — generate images from HTML templates") { generate, config };
         root.Name = ToolName;
 
         return new CommandLineBuilder(root)
@@ -30,6 +34,7 @@ internal static class Cli
             .UseHelp(help => help.HelpBuilder.CustomizeLayout(context =>
             {
                 var examples = context.Command == generate ? GenerateCommand.Examples
+                    : context.Command == config ? ConfigCommand.Examples
                     : context.Command == root ? RootExamples
                     : null;
                 var layout = HelpBuilder.Default.GetLayout();
