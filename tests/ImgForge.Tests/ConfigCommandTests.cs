@@ -118,6 +118,19 @@ public sealed class ConfigCommandTests : IDisposable
         Assert.False(Store.Exists);
     }
 
+    [Theory]
+    [InlineData("https://example.com/scl/fo/abc")]
+    [InlineData("https://dropbox.com.evil.example/scl/fo/abc")]
+    [InlineData("https://www.dropbox.com/")]
+    public async Task Add_DropboxNonDropboxUrl_FailsWithoutSaving(string value)
+    {
+        var (exitCode, _, stderr) = await InvokeAsync("config", "add", "dropbox-folders", value);
+
+        Assert.Equal(1, exitCode);
+        Assert.Contains("isn't a Dropbox link", stderr);
+        Assert.False(Store.Exists);
+    }
+
     [Fact]
     public async Task Add_Duplicate_DoesNotAddTwice()
     {

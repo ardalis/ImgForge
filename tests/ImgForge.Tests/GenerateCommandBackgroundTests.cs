@@ -22,7 +22,7 @@ public class GenerateCommandBackgroundTests
         Assert.Equal(1, exitCode);
         Assert.Equal(
             "Error: Invalid --bg value \"random:bogus\": unknown provider \"bogus\". " +
-            "Valid providers: picsum, loremflickr, placeholder, unsplash, pexels, pixabay, local (for example: --bg random:picsum).",
+            "Valid providers: picsum, loremflickr, placeholder, unsplash, pexels, pixabay, dropbox, local (for example: --bg random:picsum).",
             stderr.Trim());
         Assert.DoesNotContain("Choose a destination format", stdout);
     }
@@ -65,15 +65,46 @@ public class GenerateCommandBackgroundTests
     }
 
     [Fact]
-    public void LoadImageDirectories_RandomBackground_ReturnsConfiguredFolders()
+    public void LoadImageSources_RandomBackground_ReturnsConfiguredFolders()
     {
         using var settings = new TempSettingsDirectory();
-        settings.WriteSettingsFile("""{ "imageDirectories": ["/pics/a", "/pics/b"] }""");
+        settings.WriteSettingsFile(
+            """{ "imageDirectories": ["/pics/a", "/pics/b"], "dropboxFolders": ["https://www.dropbox.com/scl/fo/a"] }""");
 
-        Assert.Equal(["/pics/a", "/pics/b"],
-            GenerateCommand.LoadImageDirectories("random", () => settings.Store, TextWriter.Null));
-        Assert.Equal(["/pics/a", "/pics/b"],
-            GenerateCommand.LoadImageDirectories("random:local", () => settings.Store, TextWriter.Null));
+        foreach (var background in new[] { "random", "random:local", "random:dropbox" })
+        {
+            var sources = GenerateCommand.LoadImageSources(background, () => settings.Store, TextWriter.Null);
+            Assert.Equal(["/pics/a", "/pics/b"], sources.Directories);
+            Assert.Equal(["https://www.dropbox.com/scl/fo/a"], sources.DropboxFolders);
+            Assert.Equal(Path.Combine(settings.Store.Directory, "cache", "dropbox"), sources.DropboxCacheDirectory);
+        }
+    }
+
+    [Fact]
+    public async Task Invoke_RandomDropboxWithNoDropboxFolders_FailsWithHowToAddOne()
+    {
+        using var settings = new TempSettingsDirectory();
+        settings.WriteSettingsFile("""{ "imageDirectories": ["/pics/a"] }""");
+
+        var (exitCode, stdout, stderr) = await InvokeAsync(
+            settings.Store, "1" + Environment.NewLine,
+            "generate", "--title", "Hello", "--template", "no-such-template.html", "--bg", "random:dropbox");
+
+        Assert.Equal(1, exitCode);
+        Assert.Equal(
+            "Error: Invalid --bg value \"random:dropbox\": no Dropbox folders are configured. " +
+            "Add one with 'imgforge config add dropbox-folders <shared folder link>'.",
+            stderr.Trim());
+        Assert.DoesNotContain("Choose a destination format", stdout);
+    }
+
+    [Fact]
+    public void BgOptionHelp_DescribesDropboxFolders()
+    {
+        var bg = GenerateCommand.Build().Options.Single(o => o.Name == "bg");
+
+        Assert.Contains("dropbox-folders", bg.Description);
+        Assert.Contains("dropbox (", bg.Description);
     }
 
     [Theory]
@@ -82,35 +113,39 @@ public class GenerateCommandBackgroundTests
     [InlineData("https://example.com/bg.jpg")]
     [InlineData("random:picsum")]
     [InlineData("random:placeholder:0f172a")]
-    public void LoadImageDirectories_NotRandomOrLocal_DoesNotReadSettings(string? background)
+    public void LoadImageSources_NotRandomLocalOrDropbox_DoesNotReadSettings(string? background)
     {
-        var directories = GenerateCommand.LoadImageDirectories(
+        var sources = GenerateCommand.LoadImageSources(
             background, () => throw new InvalidOperationException("settings should not be read"), TextWriter.Null);
 
-        Assert.Empty(directories);
+        Assert.Empty(sources.Directories);
+        Assert.Empty(sources.DropboxFolders);
     }
 
     [Fact]
-    public void LoadImageDirectories_PlainRandomWithBrokenSettings_WarnsAndUsesNoFolders()
+    public void LoadImageSources_PlainRandomWithBrokenSettings_WarnsAndUsesNoFolders()
     {
         using var settings = new TempSettingsDirectory();
         settings.WriteSettingsFile("{ not json");
         using var warnings = new StringWriter();
 
-        var directories = GenerateCommand.LoadImageDirectories("random", () => settings.Store, warnings);
+        var sources = GenerateCommand.LoadImageSources("random", () => settings.Store, warnings);
 
-        Assert.Empty(directories);
+        Assert.Empty(sources.Directories);
+        Assert.Empty(sources.DropboxFolders);
         Assert.StartsWith("Warning: couldn't read your image folders, so they won't be used:", warnings.ToString());
     }
 
-    [Fact]
-    public void LoadImageDirectories_RandomLocalWithBrokenSettings_Throws()
+    [Theory]
+    [InlineData("random:local")]
+    [InlineData("random:dropbox")]
+    public void LoadImageSources_SingleProviderWithBrokenSettings_Throws(string background)
     {
         using var settings = new TempSettingsDirectory();
         settings.WriteSettingsFile("{ not json");
 
         Assert.Throws<InvalidDataException>(() =>
-            GenerateCommand.LoadImageDirectories("random:local", () => settings.Store, TextWriter.Null));
+            GenerateCommand.LoadImageSources(background, () => settings.Store, TextWriter.Null));
     }
 
     private static Task<(int ExitCode, string Stdout, string Stderr)> InvokeAsync(string stdin, params string[] args) =>

@@ -18,10 +18,11 @@ internal sealed record RandomBackgroundSpec
     public const string Unsplash = "unsplash";
     public const string Pexels = "pexels";
     public const string Pixabay = "pixabay";
+    public const string Dropbox = "dropbox";
     public const string Local = "local";
 
     /// <summary>The provider names accepted after <c>random:</c>, in the order shown to users.</summary>
-    public static IReadOnlyList<string> ProviderNames { get; } = [Picsum, LoremFlickr, Placeholder, Unsplash, Pexels, Pixabay, Local];
+    public static IReadOnlyList<string> ProviderNames { get; } = [Picsum, LoremFlickr, Placeholder, Unsplash, Pexels, Pixabay, Dropbox, Local];
 
     /// <summary>Providers that need an API key: the environment variable holding it, and how to describe it.</summary>
     private static readonly Dictionary<string, KeyedProvider> KeyedProviders = new()
@@ -115,7 +116,7 @@ internal sealed record RandomBackgroundSpec
         if (parts.Length == 2)
             return new RandomBackgroundSpec(name, null);
 
-        if (name is Picsum or Local)
+        if (name is Picsum or Dropbox or Local)
             throw Invalid(background, $"{name} doesn't take an option. Use \"{Keyword}:{name}\".");
 
         var option = parts[2].Trim();
@@ -138,7 +139,13 @@ internal sealed record RandomBackgroundSpec
     /// </summary>
     /// <param name="httpClient">The client to use, or <c>null</c> for <see cref="HttpImageDownloader.SharedClient"/>.</param>
     /// <param name="imageDirectories">The local image folders, used by <c>random:local</c>.</param>
-    public IRandomBackgroundProvider? CreateProvider(HttpClient? httpClient = null, IEnumerable<string>? imageDirectories = null)
+    /// <param name="dropboxFolders">The Dropbox shared-folder links, used by <c>random:dropbox</c>.</param>
+    /// <param name="dropboxCacheDirectory">Where <c>random:dropbox</c> caches folder downloads; <see cref="DropboxProvider.DefaultCacheDirectory"/> by default.</param>
+    public IRandomBackgroundProvider? CreateProvider(
+        HttpClient? httpClient = null,
+        IEnumerable<string>? imageDirectories = null,
+        IEnumerable<string>? dropboxFolders = null,
+        string? dropboxCacheDirectory = null)
     {
         var client = httpClient ?? HttpImageDownloader.SharedClient;
         return ProviderName switch
@@ -150,6 +157,10 @@ internal sealed record RandomBackgroundSpec
             Unsplash => new UnsplashProvider(client, _apiKey!),
             Pexels => new PexelsProvider(client, _apiKey!),
             Pixabay => new PixabayProvider(client, _apiKey!),
+            Dropbox => new DropboxProvider(dropboxFolders ?? [], client)
+            {
+                CacheDirectory = dropboxCacheDirectory ?? DropboxProvider.DefaultCacheDirectory()
+            },
             Local => new LocalImageProvider(imageDirectories ?? []),
             _ => throw new InvalidOperationException($"Unhandled provider \"{ProviderName}\".")
         };

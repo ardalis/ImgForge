@@ -26,7 +26,7 @@ public class ImageGenerator(TemplateRenderer renderer)
     /// </summary>
     internal RandomBackgroundResolver RandomBackgrounds
     {
-        get => _randomBackgrounds ??= new RandomBackgroundResolver(ImageDirectories);
+        get => _randomBackgrounds ??= new RandomBackgroundResolver(ImageDirectories, DropboxFolders, DropboxCacheDirectory);
         set => _randomBackgrounds = value;
     }
 
@@ -37,6 +37,15 @@ public class ImageGenerator(TemplateRenderer renderer)
     /// solid-color placeholder) and that <c>--bg random:local</c> uses on its own: the <c>image-directories</c> setting.
     /// </summary>
     public IReadOnlyList<string> ImageDirectories { get; init; } = [];
+
+    /// <summary>
+    /// Dropbox shared-folder links that <c>--bg random</c> picks images from (just before the local image folders) and
+    /// that <c>--bg random:dropbox</c> uses on its own: the <c>dropbox-folders</c> setting.
+    /// </summary>
+    public IReadOnlyList<string> DropboxFolders { get; init; } = [];
+
+    /// <summary>Where Dropbox folder downloads are cached; <c>null</c> for <see cref="DropboxProvider.DefaultCacheDirectory"/>.</summary>
+    public string? DropboxCacheDirectory { get; init; }
 
     public async Task<string> GenerateAsync(GenerateOptions opts)
     {
@@ -51,9 +60,9 @@ public class ImageGenerator(TemplateRenderer renderer)
                 // Report a bad --template before spending time on (or failing) a download.
                 TemplateRenderer.EnsureTemplateExists(opts.Template);
                 var resolver = ResolverFor(spec);
-                // Local images are resized with Chromium. Download it (first run only) now, so the download doesn't
-                // count against the resolver's per-provider time limit.
-                if (resolver.Providers.Any(p => p is LocalImageProvider))
+                // Local and Dropbox images are resized with Chromium. Download it (first run only) now, so the download
+                // doesn't count against the resolver's per-provider time limit.
+                if (resolver.Providers.Any(p => p is LocalImageProvider or DropboxProvider))
                     await EnsureBrowserAsync();
                 var resolved = await resolver.ResolveToFileAsync(opts.Width, opts.Height);
                 randomBackgroundFile = resolved.Path;
@@ -80,7 +89,10 @@ public class ImageGenerator(TemplateRenderer renderer)
     /// <c>--bg random:&lt;provider&gt;</c>.
     /// </summary>
     internal RandomBackgroundResolver ResolverFor(RandomBackgroundSpec spec) =>
-        spec.CreateProvider(imageDirectories: ImageDirectories) is { } provider
+        spec.CreateProvider(
+            imageDirectories: ImageDirectories,
+            dropboxFolders: DropboxFolders,
+            dropboxCacheDirectory: DropboxCacheDirectory) is { } provider
             ? new RandomBackgroundResolver(provider)
             {
                 BackgroundOption = spec.OptionText,

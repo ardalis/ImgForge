@@ -10,6 +10,12 @@ internal interface IRandomBackgroundProvider
     /// <exception cref="RandomBackgroundProviderException">The provider responded, but not with a usable image.</exception>
     /// <exception cref="HttpRequestException">The provider could not be reached.</exception>
     Task<RandomBackgroundImage> FetchAsync(int width, int height, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// The most time this provider's whole fetch may take, or <c>null</c> (the default) to use the resolver's
+    /// <see cref="RandomBackgroundResolver.DownloadTimeout"/>.
+    /// </summary>
+    TimeSpan? TimeLimit => null;
 }
 
 /// <summary>A downloaded random background image.</summary>

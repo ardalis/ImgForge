@@ -82,7 +82,7 @@ public class RandomBackgroundSpecTests
 
         Assert.Equal(
             "Invalid --bg value \"random:flickr\": unknown provider \"flickr\". " +
-            "Valid providers: picsum, loremflickr, placeholder, unsplash, pexels, pixabay, local (for example: --bg random:picsum).",
+            "Valid providers: picsum, loremflickr, placeholder, unsplash, pexels, pixabay, dropbox, local (for example: --bg random:picsum).",
             ex.Message);
     }
 
@@ -359,5 +359,50 @@ public class RandomBackgroundSpecTests
 
         Assert.Contains(resolver.Providers, p => p is LocalImageProvider);
         Assert.IsType<PlaceholderProvider>(resolver.Providers[^1]);
+    }
+
+    [Fact]
+    public void Parse_Dropbox_SelectsDropbox()
+    {
+        var spec = RandomBackgroundSpec.Parse(" Random:DROPBOX ");
+
+        Assert.Equal(RandomBackgroundSpec.Dropbox, spec.ProviderName);
+        Assert.Equal("--bg random:dropbox", spec.OptionText);
+    }
+
+    [Fact]
+    public void Parse_DropboxWithOption_Throws()
+    {
+        var ex = Assert.Throws<ArgumentException>(() => RandomBackgroundSpec.Parse("random:dropbox:photos"));
+
+        Assert.Equal("Invalid --bg value \"random:dropbox:photos\": dropbox doesn't take an option. Use \"random:dropbox\".", ex.Message);
+    }
+
+    [Fact]
+    public void ResolverFor_Dropbox_UsesOnlyDropboxFoldersAndCacheFromGenerator()
+    {
+        var generator = new ImageGenerator(new TemplateRenderer())
+        {
+            ImageDirectories = ["/pics"],
+            DropboxFolders = ["https://www.dropbox.com/scl/fo/a"],
+            DropboxCacheDirectory = "/cache"
+        };
+
+        var resolver = generator.ResolverFor(RandomBackgroundSpec.Parse("random:dropbox"));
+
+        var provider = Assert.IsType<DropboxProvider>(Assert.Single(resolver.Providers));
+        Assert.Equal(["https://www.dropbox.com/scl/fo/a"], provider.Folders);
+        Assert.Equal("/cache", provider.CacheDirectory);
+        Assert.Equal("--bg random:dropbox", resolver.BackgroundOption);
+    }
+
+    [Fact]
+    public void DefaultResolver_IncludesDropboxFoldersFromGenerator()
+    {
+        var generator = new ImageGenerator(new TemplateRenderer()) { DropboxFolders = ["https://www.dropbox.com/scl/fo/a"] };
+
+        var resolver = generator.ResolverFor(RandomBackgroundSpec.Default);
+
+        Assert.Contains(resolver.Providers, p => p is DropboxProvider);
     }
 }

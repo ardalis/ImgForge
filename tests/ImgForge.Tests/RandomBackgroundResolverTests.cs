@@ -178,6 +178,71 @@ public class RandomBackgroundResolverTests
     }
 
     [Fact]
+    public void DefaultProviders_WithDropboxFolders_PutsDropboxJustBeforeLocalFolders()
+    {
+        var providers = RandomBackgroundResolver.DefaultProviders(
+            "u", "pe", "pi", imageDirectories: ["/pics"],
+            dropboxFolders: ["https://www.dropbox.com/scl/fo/a"], dropboxCacheDirectory: "/cache").ToList();
+
+        Assert.Collection(providers,
+            p => Assert.IsType<UnsplashProvider>(p),
+            p => Assert.IsType<PexelsProvider>(p),
+            p => Assert.IsType<PixabayProvider>(p),
+            p => Assert.IsType<PicsumProvider>(p),
+            p =>
+            {
+                var dropbox = Assert.IsType<DropboxProvider>(p);
+                Assert.Equal(["https://www.dropbox.com/scl/fo/a"], dropbox.Folders);
+                Assert.Equal("/cache", dropbox.CacheDirectory);
+            },
+            p => Assert.IsType<LocalImageProvider>(p),
+            p => Assert.IsType<PlaceholderProvider>(p));
+    }
+
+    [Fact]
+    public void DefaultProviders_NoDropboxFolders_LeavesOutDropbox()
+    {
+        Assert.DoesNotContain(RandomBackgroundResolver.DefaultProviders(null, dropboxFolders: []), p => p is DropboxProvider);
+        Assert.DoesNotContain(RandomBackgroundResolver.DefaultProviders(null, dropboxFolders: [" "]), p => p is DropboxProvider);
+    }
+
+    [Fact]
+    public void BuildErrorMessage_DropboxFailed_PointsAtDropboxSettingAndNetwork()
+    {
+        var message = RandomBackgroundResolver.BuildErrorMessage(
+            [new(DropboxProvider.ProviderName, "the site returned HTTP 500")], "--bg random:dropbox");
+
+        Assert.Contains("Could not load a random background image from Dropbox folders (used by --bg random:dropbox): the site returned HTTP 500.", message);
+        Assert.Contains("Check your network connection", message);
+        Assert.Contains("imgforge config add dropbox-folders <shared folder link>", message);
+        Assert.DoesNotContain("image-directories", message);
+    }
+
+    [Fact]
+    public async Task ResolveToFileAsync_ProviderWithItsOwnTimeLimit_GetsThatLimitInsteadOfTheResolvers()
+    {
+        var provider = new SlowProvider { TimeLimit = TimeSpan.FromMilliseconds(50) };
+        var resolver = new RandomBackgroundResolver(provider) { DownloadTimeout = TimeSpan.FromMinutes(5) };
+
+        var ex = await Assert.ThrowsAsync<ImgForge.Core.ImageLoadException>(() => resolver.ResolveToFileAsync(10, 10));
+
+        Assert.Contains("within 0.05 seconds", ex.Message);
+    }
+
+    private sealed class SlowProvider : IRandomBackgroundProvider
+    {
+        public string Name => "slow";
+
+        public TimeSpan? TimeLimit { get; init; }
+
+        public async Task<RandomBackgroundImage> FetchAsync(int width, int height, CancellationToken cancellationToken)
+        {
+            await Task.Delay(Timeout.Infinite, cancellationToken);
+            throw new InvalidOperationException("unreachable");
+        }
+    }
+
+    [Fact]
     public void DefaultProviders_NoImageDirectories_LeavesOutLocalFolders()
     {
         Assert.DoesNotContain(RandomBackgroundResolver.DefaultProviders(null, imageDirectories: []), p => p is LocalImageProvider);

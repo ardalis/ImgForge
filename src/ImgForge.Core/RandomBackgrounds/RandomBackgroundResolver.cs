@@ -19,21 +19,29 @@ internal sealed class RandomBackgroundResolver
     /// is set (<c>UNSPLASH_ACCESS_KEY</c>, <c>PEXELS_API_KEY</c>, <c>PIXABAY_API_KEY</c>).
     /// </summary>
     /// <param name="imageDirectories">Local image folders to fall back to before the placeholder; none by default.</param>
-    public RandomBackgroundResolver(IEnumerable<string>? imageDirectories = null) : this(DefaultProviders(
+    /// <param name="dropboxFolders">Dropbox shared-folder links to fall back to before local folders; none by default.</param>
+    /// <param name="dropboxCacheDirectory">Where Dropbox folder downloads are cached; <see cref="DropboxProvider.DefaultCacheDirectory"/> by default.</param>
+    public RandomBackgroundResolver(
+        IEnumerable<string>? imageDirectories = null,
+        IEnumerable<string>? dropboxFolders = null,
+        string? dropboxCacheDirectory = null) : this(DefaultProviders(
         UnsplashProvider.AccessKeyFromEnvironment(),
         PexelsProvider.ApiKeyFromEnvironment(),
         PixabayProvider.ApiKeyFromEnvironment(),
-        imageDirectories))
+        imageDirectories,
+        dropboxFolders: dropboxFolders,
+        dropboxCacheDirectory: dropboxCacheDirectory))
     { }
 
     /// <summary>
     /// The default provider order: Unsplash, Pexels, and Pixabay (each only when its key is given), picsum.photos,
-    /// images from the local <paramref name="imageDirectories"/> (only when at least one is given), then a solid-color
-    /// placeholder from placehold.co as the last resort.
+    /// images from the <paramref name="dropboxFolders"/>, then from the local <paramref name="imageDirectories"/> (each
+    /// only when at least one is given), then a solid-color placeholder from placehold.co as the last resort.
     /// </summary>
     internal static IEnumerable<IRandomBackgroundProvider> DefaultProviders(
         string? unsplashAccessKey, string? pexelsApiKey = null, string? pixabayApiKey = null,
-        IEnumerable<string>? imageDirectories = null, IImageResizer? resizer = null)
+        IEnumerable<string>? imageDirectories = null, IImageResizer? resizer = null,
+        IEnumerable<string>? dropboxFolders = null, string? dropboxCacheDirectory = null)
     {
         if (!string.IsNullOrWhiteSpace(unsplashAccessKey))
             yield return new UnsplashProvider(unsplashAccessKey);
@@ -42,6 +50,12 @@ internal sealed class RandomBackgroundResolver
         if (!string.IsNullOrWhiteSpace(pixabayApiKey))
             yield return new PixabayProvider(pixabayApiKey);
         yield return new PicsumProvider();
+        var dropbox = new DropboxProvider(dropboxFolders ?? [], resizer: resizer)
+        {
+            CacheDirectory = dropboxCacheDirectory ?? DropboxProvider.DefaultCacheDirectory()
+        };
+        if (dropbox.Folders.Count > 0)
+            yield return dropbox;
         var local = new LocalImageProvider(imageDirectories ?? [], resizer);
         if (local.Directories.Count > 0)
             yield return local;
@@ -105,8 +119,9 @@ internal sealed class RandomBackgroundResolver
     private async Task<(RandomBackgroundImage? Image, string? FailureReason)> TryFetchAsync(
         IRandomBackgroundProvider provider, int width, int height, CancellationToken cancellationToken)
     {
+        var timeLimit = provider.TimeLimit ?? DownloadTimeout;
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeout.CancelAfter(DownloadTimeout);
+        timeout.CancelAfter(timeLimit);
 
         try
         {
@@ -114,9 +129,12 @@ internal sealed class RandomBackgroundResolver
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested && timeout.IsCancellationRequested)
         {
-            return (null, provider is LocalImageProvider
-                ? $"the image could not be found and resized within {HttpImageDownloader.FormatSeconds(DownloadTimeout)}"
-                : $"the image did not finish downloading within {HttpImageDownloader.FormatSeconds(DownloadTimeout)}");
+            return (null, provider switch
+            {
+                LocalImageProvider => $"the image could not be found and resized within {HttpImageDownloader.FormatSeconds(timeLimit)}",
+                DropboxProvider => $"the folders could not be downloaded and an image resized within {HttpImageDownloader.FormatSeconds(timeLimit)}",
+                _ => $"the image did not finish downloading within {HttpImageDownloader.FormatSeconds(timeLimit)}"
+            });
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
@@ -173,6 +191,9 @@ internal sealed class RandomBackgroundResolver
         lines.Add("You can:");
         if (failures.Any(f => f.ProviderName != LocalImageProvider.ProviderName))
             lines.Add("  - Check your network connection, then try again later.");
+        if (failures.Any(f => f.ProviderName == DropboxProvider.ProviderName))
+            lines.Add("  - Check your Dropbox folders with 'imgforge config show' " +
+                "(add one with 'imgforge config add dropbox-folders <shared folder link>').");
         if (failures.Any(f => f.ProviderName == LocalImageProvider.ProviderName))
             lines.Add("  - Check your image folders with 'imgforge config show' " +
                 "(add one with 'imgforge config add image-directories <folder>').");
