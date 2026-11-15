@@ -165,4 +165,49 @@ public class RandomBackgroundResolverTests
         Assert.Equal(TimeSpan.FromSeconds(30), resolver.DownloadTimeout);
         Assert.Equal(Path.GetTempPath(), resolver.TempDirectory);
     }
+
+    [Fact]
+    public void DefaultProviders_WithImageDirectories_PutsLocalFoldersAfterPicsumBeforePlaceholder()
+    {
+        var providers = RandomBackgroundResolver.DefaultProviders(null, imageDirectories: ["/pics/a", "/pics/b"]).ToList();
+
+        Assert.Collection(providers,
+            p => Assert.IsType<PicsumProvider>(p),
+            p => Assert.Equal(["/pics/a", "/pics/b"], Assert.IsType<LocalImageProvider>(p).Directories),
+            p => Assert.IsType<PlaceholderProvider>(p));
+    }
+
+    [Fact]
+    public void DefaultProviders_NoImageDirectories_LeavesOutLocalFolders()
+    {
+        Assert.DoesNotContain(RandomBackgroundResolver.DefaultProviders(null, imageDirectories: []), p => p is LocalImageProvider);
+        Assert.DoesNotContain(RandomBackgroundResolver.DefaultProviders(null, imageDirectories: [" "]), p => p is LocalImageProvider);
+    }
+
+    [Fact]
+    public void BuildErrorMessage_LocalFoldersOnly_PointsAtImageFolderSettingNotNetwork()
+    {
+        var message = RandomBackgroundResolver.BuildErrorMessage(
+            [new RandomBackgroundProviderFailure(LocalImageProvider.ProviderName, "no supported images were found")],
+            "--bg random:local");
+
+        Assert.StartsWith(
+            "Could not load a random background image from local image folders (used by --bg random:local): " +
+            "no supported images were found.", message);
+        Assert.Contains("imgforge config show", message);
+        Assert.DoesNotContain("network", message);
+    }
+
+    [Fact]
+    public void BuildErrorMessage_LocalAndRemoteFailures_MentionsBoth()
+    {
+        var message = RandomBackgroundResolver.BuildErrorMessage(
+        [
+            new RandomBackgroundProviderFailure("picsum.photos", "the site returned HTTP 522"),
+            new RandomBackgroundProviderFailure(LocalImageProvider.ProviderName, "no supported images were found"),
+        ]);
+
+        Assert.Contains("network connection", message);
+        Assert.Contains("imgforge config add image-directories", message);
+    }
 }

@@ -18,9 +18,10 @@ internal sealed record RandomBackgroundSpec
     public const string Unsplash = "unsplash";
     public const string Pexels = "pexels";
     public const string Pixabay = "pixabay";
+    public const string Local = "local";
 
     /// <summary>The provider names accepted after <c>random:</c>, in the order shown to users.</summary>
-    public static IReadOnlyList<string> ProviderNames { get; } = [Picsum, LoremFlickr, Placeholder, Unsplash, Pexels, Pixabay];
+    public static IReadOnlyList<string> ProviderNames { get; } = [Picsum, LoremFlickr, Placeholder, Unsplash, Pexels, Pixabay, Local];
 
     /// <summary>Providers that need an API key: the environment variable holding it, and how to describe it.</summary>
     private static readonly Dictionary<string, KeyedProvider> KeyedProviders = new()
@@ -114,7 +115,7 @@ internal sealed record RandomBackgroundSpec
         if (parts.Length == 2)
             return new RandomBackgroundSpec(name, null);
 
-        if (name == Picsum)
+        if (name is Picsum or Local)
             throw Invalid(background, $"{name} doesn't take an option. Use \"{Keyword}:{name}\".");
 
         var option = parts[2].Trim();
@@ -136,7 +137,8 @@ internal sealed record RandomBackgroundSpec
     /// Creates the selected provider (configured with <see cref="Option"/>), or <c>null</c> for the default order.
     /// </summary>
     /// <param name="httpClient">The client to use, or <c>null</c> for <see cref="HttpImageDownloader.SharedClient"/>.</param>
-    public IRandomBackgroundProvider? CreateProvider(HttpClient? httpClient = null)
+    /// <param name="imageDirectories">The local image folders, used by <c>random:local</c>.</param>
+    public IRandomBackgroundProvider? CreateProvider(HttpClient? httpClient = null, IEnumerable<string>? imageDirectories = null)
     {
         var client = httpClient ?? HttpImageDownloader.SharedClient;
         return ProviderName switch
@@ -148,6 +150,7 @@ internal sealed record RandomBackgroundSpec
             Unsplash => new UnsplashProvider(client, _apiKey!),
             Pexels => new PexelsProvider(client, _apiKey!),
             Pixabay => new PixabayProvider(client, _apiKey!),
+            Local => new LocalImageProvider(imageDirectories ?? []),
             _ => throw new InvalidOperationException($"Unhandled provider \"{ProviderName}\".")
         };
     }

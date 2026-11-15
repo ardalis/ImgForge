@@ -22,7 +22,7 @@ public class GenerateCommandBackgroundTests
         Assert.Equal(1, exitCode);
         Assert.Equal(
             "Error: Invalid --bg value \"random:bogus\": unknown provider \"bogus\". " +
-            "Valid providers: picsum, loremflickr, placeholder, unsplash, pexels, pixabay (for example: --bg random:picsum).",
+            "Valid providers: picsum, loremflickr, placeholder, unsplash, pexels, pixabay, local (for example: --bg random:picsum).",
             stderr.Trim());
         Assert.DoesNotContain("Choose a destination format", stdout);
     }
@@ -37,7 +37,85 @@ public class GenerateCommandBackgroundTests
         Assert.Contains("placeholder", bg.Description);
     }
 
-    private static async Task<(int ExitCode, string Stdout, string Stderr)> InvokeAsync(string stdin, params string[] args)
+    [Fact]
+    public async Task Invoke_RandomLocalWithNoImageFolders_FailsWithHowToAddOne()
+    {
+        using var settings = new TempSettingsDirectory();
+
+        var (exitCode, stdout, stderr) = await InvokeAsync(
+            settings.Store, "1" + Environment.NewLine,
+            "generate", "--title", "Hello", "--template", "no-such-template.html", "--bg", "random:local");
+
+        Assert.Equal(1, exitCode);
+        Assert.Equal(
+            "Error: Invalid --bg value \"random:local\": no image folders are configured. " +
+            "Add one with 'imgforge config add image-directories <folder>'.",
+            stderr.Trim());
+        Assert.DoesNotContain("Choose a destination format", stdout);
+    }
+
+    [Fact]
+    public void BgOptionHelp_DescribesLocalImageFolders()
+    {
+        var bg = GenerateCommand.Build().Options.Single(o => o.Name == "bg");
+
+        Assert.Contains("local image folders", bg.Description);
+        Assert.Contains("image-directories", bg.Description);
+        Assert.Contains("or local", bg.Description);
+    }
+
+    [Fact]
+    public void LoadImageDirectories_RandomBackground_ReturnsConfiguredFolders()
+    {
+        using var settings = new TempSettingsDirectory();
+        settings.WriteSettingsFile("""{ "imageDirectories": ["/pics/a", "/pics/b"] }""");
+
+        Assert.Equal(["/pics/a", "/pics/b"],
+            GenerateCommand.LoadImageDirectories("random", () => settings.Store, TextWriter.Null));
+        Assert.Equal(["/pics/a", "/pics/b"],
+            GenerateCommand.LoadImageDirectories("random:local", () => settings.Store, TextWriter.Null));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("./bg.jpg")]
+    [InlineData("https://example.com/bg.jpg")]
+    public void LoadImageDirectories_NotRandom_DoesNotReadSettings(string? background)
+    {
+        var directories = GenerateCommand.LoadImageDirectories(
+            background, () => throw new InvalidOperationException("settings should not be read"), TextWriter.Null);
+
+        Assert.Empty(directories);
+    }
+
+    [Fact]
+    public void LoadImageDirectories_PlainRandomWithBrokenSettings_WarnsAndUsesNoFolders()
+    {
+        using var settings = new TempSettingsDirectory();
+        settings.WriteSettingsFile("{ not json");
+        using var warnings = new StringWriter();
+
+        var directories = GenerateCommand.LoadImageDirectories("random", () => settings.Store, warnings);
+
+        Assert.Empty(directories);
+        Assert.StartsWith("Warning: couldn't read your image folders, so they won't be used:", warnings.ToString());
+    }
+
+    [Fact]
+    public void LoadImageDirectories_RandomLocalWithBrokenSettings_Throws()
+    {
+        using var settings = new TempSettingsDirectory();
+        settings.WriteSettingsFile("{ not json");
+
+        Assert.Throws<InvalidDataException>(() =>
+            GenerateCommand.LoadImageDirectories("random:local", () => settings.Store, TextWriter.Null));
+    }
+
+    private static Task<(int ExitCode, string Stdout, string Stderr)> InvokeAsync(string stdin, params string[] args) =>
+        InvokeAsync(null, stdin, args);
+
+    private static async Task<(int ExitCode, string Stdout, string Stderr)> InvokeAsync(
+        ImgForge.Core.Configuration.UserSettingsStore? store, string stdin, params string[] args)
     {
         var (originalIn, originalOut, originalError) = (Console.In, Console.Out, Console.Error);
         using var output = new StringWriter();
@@ -48,7 +126,7 @@ public class GenerateCommandBackgroundTests
             Console.SetOut(output);
             Console.SetError(error);
 
-            var root = new RootCommand { GenerateCommand.Build() };
+            var root = new RootCommand { store is null ? GenerateCommand.Build() : GenerateCommand.Build(() => store) };
             var exitCode = await root.InvokeAsync(args);
             return (exitCode, output.ToString(), error.ToString());
         }

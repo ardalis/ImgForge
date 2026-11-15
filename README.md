@@ -87,7 +87,7 @@ imgforge generate \
   --template blog \             # built-in name ("blog", "youtube", "blog-subtitle") or path to a .html file or folder (with a template.html file in it); optional if a default template exists
   --title "Modular Monoliths Done Right" \
   --subtitle "A practical guide" \  # optional subtitle rendered below the title in templates that support it
-  --bg ./images/cover.jpg \     # local path, HTTP(S) URL, "random" (downloads a random image from picsum.photos, or a solid-color placeholder if that fails), or "random:<provider>"; optional
+  --bg ./images/cover.jpg \     # local path, HTTP(S) URL, "random" (downloads a random image from picsum.photos, falling back to your local image folders, then a solid-color placeholder), or "random:<provider>"; optional
   --overlay https://example.com/logo.png \  # optional; repeat for multiple overlays; passed to the template as-is
   --headshot ./guest.jpg \      # optional guest headshot (local path or URL); placed in the template's headshot slot
   --headshot-filter blue-mono \ # built-in: blue-mono (default), mono, none — or a raw CSS filter string
@@ -108,7 +108,7 @@ Run `imgforge generate --help` to see every option and a set of examples in the 
 | `--template` | No | `.tools/imgforge/template.html` | Built-in template name (`blog`, `youtube`, `blog-subtitle`) or path to a `.html` file or a directory containing `template.html`. If omitted, a default template is looked up (see [Custom Templates](#custom-templates)); it's an error if none is found |
 | `--title` | Yes | — | Main heading text injected into the template |
 | `--subtitle` | No | — | Optional subtitle rendered below the title in templates that support it (e.g. `blog-subtitle`) |
-| `--bg` | No | — | Background image: local file path, HTTP(S) URL, `random`, or `random:<provider>` (see [Random backgrounds](#random-backgrounds)). `random` downloads a random image before rendering, from [picsum.photos](https://picsum.photos) (or first from Unsplash, Pexels, or Pixabay when `UNSPLASH_ACCESS_KEY`, `PEXELS_API_KEY`, or `PIXABAY_API_KEY` is set), falling back to a solid dark-slate placeholder from [placehold.co](https://placehold.co) so you still get an image; providers are tried in order, and one that doesn't start responding within 5 seconds, takes over 30 seconds to download, or returns an error is skipped with a warning; if every provider fails, the command fails with an error listing each provider and why it failed). The page, including remote images, must finish loading within 30 seconds. If a remote background is unreachable or returns an HTTP error, the command fails with an error naming the site (no image is written) so you can retry later or choose a different background |
+| `--bg` | No | — | Background image: local file path, HTTP(S) URL, `random`, or `random:<provider>` (see [Random backgrounds](#random-backgrounds)). `random` downloads a random image before rendering, from [picsum.photos](https://picsum.photos) (or first from Unsplash, Pexels, or Pixabay when `UNSPLASH_ACCESS_KEY`, `PEXELS_API_KEY`, or `PIXABAY_API_KEY` is set), then from your [local image folders](#local-image-folders) if you have any, falling back to a solid dark-slate placeholder from [placehold.co](https://placehold.co) so you still get an image; providers are tried in order, and one that doesn't start responding within 5 seconds, takes over 30 seconds to download, or returns an error is skipped with a warning; if every provider fails, the command fails with an error listing each provider and why it failed). The page, including remote images, must finish loading within 30 seconds. If a remote background is unreachable or returns an HTTP error, the command fails with an error naming the site (no image is written) so you can retry later or choose a different background |
 | `--overlay` | No | — | Overlay image source. Repeatable for multiple overlays. Passed to the template as-is (see [Overlay Images](#overlay-images)). A remote overlay that fails to load stops the run with an error |
 | `--headshot` | No | — | Guest headshot image (local path or HTTP(S) URL) placed in the template's headshot slot. A remote headshot that fails to load stops the run with an error |
 | `--headshot-filter` | No | `blue-mono` | Filter applied to the headshot. Built-in: `blue-mono`, `mono`, `none`. Or supply a raw CSS `filter` string |
@@ -121,17 +121,17 @@ Run `imgforge generate --help` to see every option and a set of examples in the 
 
 ### Random backgrounds
 
-`--bg random` downloads a random image before rendering, trying [picsum.photos](https://picsum.photos) and then a
-solid-color placeholder from [placehold.co](https://placehold.co). If an API key is set for
-Unsplash, Pexels, or Pixabay, those are tried first (see [Unsplash](#unsplash-optional-api-key) and
-[Pexels and Pixabay](#pexels-and-pixabay-optional-api-keys)).
+`--bg random` downloads a random image before rendering, trying [picsum.photos](https://picsum.photos), then an image
+from your [local image folders](#local-image-folders) (if you've added any), and then a solid-color placeholder from
+[placehold.co](https://placehold.co). If an API key is set for Unsplash, Pexels, or Pixabay, those are tried first
+(see [Unsplash](#unsplash-optional-api-key) and [Pexels and Pixabay](#pexels-and-pixabay-optional-api-keys)).
 
 To use one provider only, use `random:<provider>`. There's no fallback, so if that provider fails, the command fails
 with an error naming it (use plain `random` to try each provider in turn):
 
 | `--bg` value | Image |
 |---|---|
-| `random` | Default: [picsum.photos](https://picsum.photos), falling back to [placehold.co](https://placehold.co) (Unsplash, Pexels, and Pixabay first when their keys are set) |
+| `random` | Default: [picsum.photos](https://picsum.photos), then your local image folders (if any), falling back to [placehold.co](https://placehold.co) (Unsplash, Pexels, and Pixabay first when their keys are set) |
 | `random:picsum` | A random photo from picsum.photos |
 | `random:loremflickr` | A random Flickr photo from [loremflickr.com](https://loremflickr.com) matching `abstract` (currently unreliable, see below) |
 | `random:loremflickr:<keyword>` | A loremflickr.com photo matching a keyword, or several separated by commas (e.g. `technology` or `city,night`) |
@@ -140,6 +140,7 @@ with an error naming it (use plain `random` to try each provider in turn):
 | `random:unsplash` | A random photo from the [Unsplash API](https://unsplash.com/developers) (needs `UNSPLASH_ACCESS_KEY`, see below) |
 | `random:pexels` | A curated photo from the [Pexels API](https://www.pexels.com/api/) (needs `PEXELS_API_KEY`, see below) |
 | `random:pixabay` | A popular photo from the [Pixabay API](https://pixabay.com/api/docs/) (needs `PIXABAY_API_KEY`, see below) |
+| `random:local` | A random image from your local image folders (see [Local image folders](#local-image-folders)) |
 
 ```bash
 imgforge generate --template blog --title "My Post" --bg random:placeholder:0f172a --format blog
@@ -149,6 +150,25 @@ LoremFlickr isn't in the default order because loremflickr.com image requests ha
 November 2026). If you pick it while it's down, you get an error naming the HTTP status. An unknown provider name or an
 invalid keyword or color fails right away, with an error listing what's valid. A local file whose name starts with
 `random:` (possible on Linux and macOS) needs a path prefix, e.g. `--bg ./random:photo.jpg`.
+
+#### Local image folders
+
+Add folders of your own images with `imgforge config add image-directories <folder>` (see
+[User settings](#user-settings)); add as many as you like. ImgForge searches every folder and all of its subfolders for
+`.jpg`, `.jpeg`, `.png`, `.webp`, `.gif`, and `.avif` files and picks one at random, each image equally likely. Hidden
+files and folders, empty files, files over 50 MB, folders that don't exist, and folders it can't read are skipped.
+
+The chosen image is cropped and scaled to the output size on your machine (no upload), using the same headless
+Chromium that renders templates: it's scaled to cover the whole image and the overflow is cropped evenly from both
+sides. JPEGs stay JPEGs; other formats become PNGs, so transparency is kept.
+
+Plain `random` uses your folders as a fallback: after the online providers, before the solid-color placeholder.
+`random:local` uses only your folders, and fails right away if none are configured.
+
+```bash
+imgforge config add image-directories ~/Pictures/backgrounds
+imgforge generate --template blog --title "My Post" --bg random:local --format blog
+```
 
 #### Unsplash (optional API key)
 
@@ -226,9 +246,10 @@ a different folder. The file is created the first time you change a setting.
 | `dropbox-folders` | Dropbox shared-folder HTTP(S) URLs to pick images from |
 | `templates` | Template files or folders (stored as full paths) |
 
-These settings are only stored for now; `generate` doesn't read them yet. Image folders and Dropbox folders will be
-used for random backgrounds ([#41](https://github.com/ardalis/ImgForge/issues/41),
-[#42](https://github.com/ardalis/ImgForge/issues/42)).
+`generate` reads `image-directories` for `--bg random` and `--bg random:local` (see
+[Local image folders](#local-image-folders)). `dropbox-folders` and `templates` are only stored for now (Dropbox folders
+will be used for random backgrounds in [#42](https://github.com/ardalis/ImgForge/issues/42)). If the settings file
+can't be read, plain `--bg random` warns and carries on without your folders.
 
 ```bash
 imgforge config show                                   # settings file location and current settings as JSON
