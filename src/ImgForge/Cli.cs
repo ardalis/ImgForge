@@ -18,7 +18,7 @@ internal static class Cli
         new("Blog / Open Graph card with a random background",
             "generate --template blog --title \"My Post Title\" --bg random --format blog"),
         new("Show every generate option and more examples", "generate --help"),
-        new("Show your saved settings (image folders, Dropbox folders, templates)", "config show"),
+        new("Show your saved settings (image folders, templates)", "config show"),
     ];
 
     /// <param name="settingsStore">The user settings store; defaults to <see cref="UserSettingsStore.CreateDefault"/>. Tests pass a temp folder.</param>

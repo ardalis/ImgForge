@@ -118,6 +118,20 @@ public class CliHelpTests
             Assert.Contains($"  # {example.Description}{Environment.NewLine}  imgforge {example.Arguments}", help);
     }
 
+    [Theory]
+    [InlineData("--help")]
+    [InlineData("config", "--help")]
+    [InlineData("config", "add", "--help")]
+    [InlineData("config", "clear", "--help")]
+    public async Task Help_DoesNotMentionRemovedDropboxSetting(params string[] args)
+    {
+        var help = await HelpAsync(args);
+
+        Assert.DoesNotContain("dropbox", help, StringComparison.OrdinalIgnoreCase);
+        if (args[0] == "config")
+            Assert.DoesNotContain("URL", help);
+    }
+
     [Fact]
     public void ConfigExamples_ParseWithoutErrorsAndUseEverySubcommand()
     {

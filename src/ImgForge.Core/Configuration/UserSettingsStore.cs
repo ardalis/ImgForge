@@ -12,6 +12,12 @@ public sealed class UserSettingsStore
     public const string DirectoryEnvironmentVariable = "IMGFORGE_CONFIG_DIR";
     public const string DefaultDirectoryName = ".imgforge";
 
+    /// <summary>
+    /// JSON properties of settings that were removed. They're dropped on load, so they aren't shown and are gone from
+    /// the file once it's saved again. <c>dropboxFolders</c> (#49) may hold Dropbox links with an access key.
+    /// </summary>
+    private static readonly string[] RemovedPropertyNames = ["dropboxFolders"];
+
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -79,10 +85,25 @@ public sealed class UserSettingsStore
         }
 
         settings ??= new UserSettings();
+        DropRemovedProperties(settings);
         // A null list in the file (e.g. "templates": null) reads as null; treat it as empty.
         foreach (var setting in UserSetting.All)
             _ = setting.GetValues(settings);
         return settings;
+    }
+
+    private static void DropRemovedProperties(UserSettings settings)
+    {
+        if (settings.AdditionalProperties is not { } extra)
+            return;
+        foreach (var key in extra.Keys.ToList())
+        {
+            if (RemovedPropertyNames.Contains(key, StringComparer.OrdinalIgnoreCase))
+            {
+                extra.Remove(key);
+                settings.HadRemovedSettings = true;
+            }
+        }
     }
 
     /// <summary>Writes the settings, creating the folder if needed. The file is replaced in one step.</summary>
