@@ -172,6 +172,12 @@ imgforge config add image-directories ~/Pictures/backgrounds
 imgforge generate --template blog --title "My Post" --bg random:local --format blog
 ```
 
+**Dropbox (and other synced folders):** ImgForge can't read Dropbox folders over the web. To use photos stored in
+Dropbox, sync the folder with the Dropbox desktop app and add its local path as an image folder, e.g.
+`imgforge config add image-directories ~/Dropbox/backgrounds`. Whether online-only (download-on-demand) files work, and
+whether only the chosen photo gets downloaded, is still being checked in
+[#47](https://github.com/ardalis/ImgForge/issues/47); until then, mark the folder as available offline to be safe.
+
 #### Unsplash (optional API key)
 
 Set the `UNSPLASH_ACCESS_KEY` environment variable to an Unsplash access key (free from
@@ -245,12 +251,13 @@ a different folder. The file is created the first time you change a setting.
 | Setting | Values |
 |---|---|
 | `image-directories` | Local folders to pick images from (stored as full paths) |
-| `dropbox-folders` | Dropbox shared-folder HTTP(S) URLs to pick images from |
+| `dropbox-folders` | Dropbox shared-folder HTTP(S) URLs (stored only; not used, see below) |
 | `templates` | Template files or folders (stored as full paths) |
 
 `generate` reads `image-directories` for `--bg random` and `--bg random:local` (see
-[Local image folders](#local-image-folders)). `dropbox-folders` and `templates` are only stored for now (Dropbox folders
-will be used for random backgrounds in [#42](https://github.com/ardalis/ImgForge/issues/42)). If the settings file
+[Local image folders](#local-image-folders)). `dropbox-folders` and `templates` are only stored for now. Reading Dropbox folders over the web
+isn't planned ([#42](https://github.com/ardalis/ImgForge/issues/42)); use a synced Dropbox folder as an
+[image folder](#local-image-folders) instead. If the settings file
 can't be read, plain `--bg random` warns and carries on without your folders.
 
 ```bash
