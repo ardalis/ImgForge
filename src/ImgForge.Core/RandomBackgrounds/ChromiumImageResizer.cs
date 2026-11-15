@@ -84,6 +84,12 @@ internal sealed class ChromiumImageResizer : IImageResizer
 
             return new RandomBackgroundImage(bytes, jpeg ? "image/jpeg" : "image/png");
         }
+        catch (PuppeteerException ex)
+        {
+            // e.g. Chromium crashed or couldn't start: let --bg random move on to the next provider.
+            throw new RandomBackgroundProviderException(
+                $"'{fullPath}' couldn't be resized ({ex.Message.TrimEnd('.', ' ')})");
+        }
         finally
         {
             RandomBackgroundResolver.TryDelete(pagePath);

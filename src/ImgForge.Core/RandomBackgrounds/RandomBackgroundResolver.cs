@@ -114,7 +114,9 @@ internal sealed class RandomBackgroundResolver
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested && timeout.IsCancellationRequested)
         {
-            return (null, $"the image did not finish downloading within {HttpImageDownloader.FormatSeconds(DownloadTimeout)}");
+            return (null, provider is LocalImageProvider
+                ? $"the image could not be found and resized within {HttpImageDownloader.FormatSeconds(DownloadTimeout)}"
+                : $"the image did not finish downloading within {HttpImageDownloader.FormatSeconds(DownloadTimeout)}");
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {

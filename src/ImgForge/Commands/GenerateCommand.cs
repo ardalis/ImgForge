@@ -248,8 +248,9 @@ public static class GenerateCommand
     }
 
     /// <summary>
-    /// The <c>image-directories</c> setting when <paramref name="background"/> is random (otherwise none, so a broken
-    /// settings file can't affect other backgrounds).
+    /// The <c>image-directories</c> setting when <paramref name="background"/> is plain <c>random</c> or
+    /// <c>random:local</c>; otherwise none, without reading settings, so a broken settings file can't affect backgrounds
+    /// that don't use local folders.
     /// </summary>
     /// <exception cref="ArgumentException"><c>--bg random:local</c> with no image folders configured.</exception>
     /// <exception cref="InvalidDataException"><c>--bg random:local</c> and the settings file is invalid.</exception>
@@ -259,7 +260,10 @@ public static class GenerateCommand
         if (!RandomBackgroundSpec.IsRandom(background))
             return [];
 
-        var localOnly = RandomBackgroundSpec.Parse(background!).ProviderName == RandomBackgroundSpec.Local;
+        var spec = RandomBackgroundSpec.Parse(background!);
+        var localOnly = spec.ProviderName == RandomBackgroundSpec.Local;
+        if (!spec.IsDefault && !localOnly)
+            return [];
         List<string> directories;
         try
         {

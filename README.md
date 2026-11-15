@@ -157,6 +157,8 @@ Add folders of your own images with `imgforge config add image-directories <fold
 [User settings](#user-settings)); add as many as you like. ImgForge searches every folder and all of its subfolders for
 `.jpg`, `.jpeg`, `.png`, `.webp`, `.gif`, and `.avif` files and picks one at random, each image equally likely. Hidden
 files and folders, empty files, files over 50 MB, folders that don't exist, and folders it can't read are skipped.
+Symbolic links to image files are used, but links to folders aren't followed (so a link loop can't repeat images). If
+the chosen image can't be read (e.g. a corrupt file), up to two others are tried.
 
 The chosen image is cropped and scaled to the output size on your machine (no upload), using the same headless
 Chromium that renders templates: it's scaled to cover the whole image and the overflow is cropped evenly from both

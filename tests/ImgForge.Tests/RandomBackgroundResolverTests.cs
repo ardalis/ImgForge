@@ -210,4 +210,35 @@ public class RandomBackgroundResolverTests
         Assert.Contains("network connection", message);
         Assert.Contains("imgforge config add image-directories", message);
     }
+
+    [Fact]
+    public async Task ResolveToFileAsync_LocalProviderTimesOut_SaysFoundAndResizedNotDownloaded()
+    {
+        var dir = Directory.CreateTempSubdirectory("imgforge-test-").FullName;
+        try
+        {
+            File.WriteAllBytes(Path.Combine(dir, "a.jpg"), [1]);
+            var resolver = new RandomBackgroundResolver(new LocalImageProvider([dir], new HangingResizer()))
+            {
+                DownloadTimeout = TimeSpan.FromMilliseconds(200)
+            };
+
+            var ex = await Assert.ThrowsAsync<ImageLoadException>(() => resolver.ResolveToFileAsync(100, 100));
+
+            Assert.Contains("local image folders (used by --bg random): the image could not be found and resized within 0.2 seconds.", ex.Message);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    private sealed class HangingResizer : IImageResizer
+    {
+        public async Task<RandomBackgroundImage> ResizeAsync(string path, int width, int height, CancellationToken cancellationToken)
+        {
+            await Task.Delay(Timeout.Infinite, cancellationToken);
+            throw new UnreachableException();
+        }
+    }
 }

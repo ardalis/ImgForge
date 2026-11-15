@@ -80,7 +80,9 @@ public class GenerateCommandBackgroundTests
     [InlineData(null)]
     [InlineData("./bg.jpg")]
     [InlineData("https://example.com/bg.jpg")]
-    public void LoadImageDirectories_NotRandom_DoesNotReadSettings(string? background)
+    [InlineData("random:picsum")]
+    [InlineData("random:placeholder:0f172a")]
+    public void LoadImageDirectories_NotRandomOrLocal_DoesNotReadSettings(string? background)
     {
         var directories = GenerateCommand.LoadImageDirectories(
             background, () => throw new InvalidOperationException("settings should not be read"), TextWriter.Null);

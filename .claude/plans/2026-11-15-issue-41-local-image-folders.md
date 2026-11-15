@@ -26,31 +26,52 @@ stored in `~/.imgforge/settings.json` but not yet read by `generate`. #42 (Dropb
 - Settings are only read when `--bg` is random, so a broken settings file doesn't affect other runs.
 
 ## Phase 1: Core provider
-- [ ] `LocalImageProvider` (`IRandomBackgroundProvider`): recursive scan, dedupe, random pick, resize via `IImageResizer`.
-- [ ] `ChromiumImageResizer`: headless-Chromium crop/scale to width × height; fails clearly if the image can't be decoded.
-- [ ] Make `ImageGenerator`'s browser bootstrap shareable (`internal`).
+- [x] `LocalImageProvider` (`IRandomBackgroundProvider`): recursive scan, dedupe, random pick, resize via `IImageResizer`.
+- [x] `ChromiumImageResizer`: headless-Chromium crop/scale to width × height; fails clearly if the image can't be decoded.
+- [x] Make `ImageGenerator`'s browser bootstrap shareable (`internal`).
 
 ## Phase 2: Wiring
-- [ ] `RandomBackgroundResolver.DefaultProviders` takes image directories; local provider inserted before placeholder.
-- [ ] `RandomBackgroundSpec`: `local` provider name; `CreateProvider` accepts image directories.
-- [ ] `ImageGenerator.ImageDirectories`; default resolver built lazily from it.
-- [ ] `GenerateCommand` loads `image-directories` from the settings store (injected through `Cli.BuildParser`) when `--bg` is random.
-- [ ] Error message for local-only failures doesn't tell the user to check their network; it points at `imgforge config add image-directories`.
+- [x] `RandomBackgroundResolver.DefaultProviders` takes image directories; local provider inserted before placeholder.
+- [x] `RandomBackgroundSpec`: `local` provider name; `CreateProvider` accepts image directories.
+- [x] `ImageGenerator.ImageDirectories`; default resolver built lazily from it.
+- [x] `GenerateCommand` loads `image-directories` from the settings store (injected through `Cli.BuildParser`) when `--bg` is random.
+- [x] Error message for local-only failures doesn't tell the user to check their network; it points at `imgforge config add image-directories`.
 
 ## Phase 3: Tests (tests/ImgForge.Tests)
-- [ ] Unit: `LocalImageProviderTests` — recursive discovery across multiple dirs, extension filtering (case-insensitive),
+- [x] Unit: `LocalImageProviderTests` — recursive discovery across multiple dirs, extension filtering (case-insensitive),
       random choice uses all images, missing dirs skipped, no images → clear error, no dirs configured → clear error,
       requested size passed to resizer, duplicates de-duped.
-- [ ] Unit: `RandomBackgroundResolverTests`/`RandomBackgroundSpecTests` — default order with/without dirs; `random:local` parsing/creation; error text.
-- [ ] Integration (`Category=Integration`): `ChromiumImageResizer` resizes a real PNG to exact dimensions; undecodable file fails.
-- [ ] CLI: generate with `random:local` and no configured folders reports a clear error.
+- [x] Unit: `RandomBackgroundResolverTests`/`RandomBackgroundSpecTests` — default order with/without dirs; `random:local` parsing/creation; error text.
+- [x] Integration (`Category=Integration`): `ChromiumImageResizer` resizes a real PNG to exact dimensions; undecodable file fails.
+- [x] CLI: generate with `random:local` and no configured folders reports a clear error.
 
 ## Phase 4: Docs
-- [ ] README: random backgrounds table/order, settings section no longer says "not read yet"; `--bg` help text.
+- [x] README: random backgrounds table/order, settings section no longer says "not read yet"; `--bg` help text.
 
 ## Phase 5: Independent review
-- [ ] Separate agent reviews the full diff (correctness, requirements, tests, security, performance, accessibility).
-- [ ] Address all significant findings (or record why not).
+- [x] Separate agent reviews the full diff (correctness, requirements, tests, security, performance, accessibility).
+- [x] Address all significant findings (or record why not).
 
 ## Phase 6: Verification
-- [ ] `dotnet BuildTestFormat.cs` passes cleanly.
+- [x] `dotnet BuildTestFormat.cs` passes cleanly.
+
+## Review findings (independent agent)
+
+Addressed:
+- High: folder symlinks were followed (loop → repeated images / runaway scan). Now enumerated with a
+  `ShouldRecursePredicate` that skips reparse points; links to image files are resolved for size, broken links skipped.
+  Tests added.
+- Medium: one bad pick failed the run. Now up to `MaxAttempts` (3) different images are tried. Tests added.
+- Medium: non-timeout Chromium errors (`PuppeteerException`) bypassed fallback. Now wrapped as
+  `RandomBackgroundProviderException`.
+- Medium: timeout wording said "downloading" for local files. Now "could not be found and resized". Test added.
+- Low: `random:picsum` etc. read settings needlessly. Now only plain `random` and `random:local` read them. Test added.
+- Low: case-insensitive de-dupe by OS. Now exact (ordinal) match only.
+
+Not addressed (deliberate):
+- Chromium launches twice (resize, then render), ~1-3 s extra, only when a local image is actually used. Reusing one
+  browser would change `ImageGenerator`'s structure; acceptable for now, possible follow-up.
+- No unit test for the `PuppeteerException` wrap: forcing a Chromium crash reliably isn't practical; the code path is a
+  single catch/rethrow.
+- Huge folder trees are scanned fully each run (bounded by the 30 s per-provider budget, with a clear message).
+  Reservoir sampling could avoid the list/sort; left as a follow-up if it proves slow in practice.

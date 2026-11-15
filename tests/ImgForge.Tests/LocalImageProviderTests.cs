@@ -78,6 +78,64 @@ public class LocalImageProviderTests : IDisposable
     }
 
     [Fact]
+    public void FindImages_DoesNotFollowFolderLinks_SoALoopDoesNotRepeatImages()
+    {
+        var a = Folder("a");
+        var image = Image(a, "sub/one.jpg");
+        if (!TryCreateLink(() => Directory.CreateSymbolicLink(Path.Combine(a, "sub", "loop"), a)))
+            return; // Creating symbolic links needs extra rights on some Windows machines.
+
+        Assert.Equal([image], LocalImageProvider.FindImages([a]));
+    }
+
+    [Fact]
+    public void FindImages_UsesLinksToImageFilesButSkipsBrokenOnes()
+    {
+        var a = Folder("a");
+        var real = Image(Folder("elsewhere"), "real.jpg");
+        var link = Path.Combine(a, "linked.jpg");
+        var broken = Path.Combine(a, "broken.jpg");
+        if (!TryCreateLink(() => File.CreateSymbolicLink(link, real)) ||
+            !TryCreateLink(() => File.CreateSymbolicLink(broken, Path.Combine(_root, "gone.jpg"))))
+            return;
+
+        Assert.Equal([link], LocalImageProvider.FindImages([a]));
+    }
+
+    [Fact]
+    public async Task FetchAsync_ChosenImageCannotBeResized_TriesAnother()
+    {
+        var a = Folder("a");
+        Image(a, "bad1.jpg");
+        Image(a, "bad2.jpg");
+        var good = Image(a, "good.jpg");
+        var resizer = new RecordingResizer { Fails = path => path != good };
+        var provider = new LocalImageProvider([a], resizer, new Random(7));
+
+        var image = await provider.FetchAsync(100, 100, CancellationToken.None);
+
+        Assert.Equal(RecordingResizer.Output, image.Content);
+        Assert.Equal(good, resizer.Calls[^1].Path);
+        Assert.Equal(resizer.Calls.Count, resizer.Calls.Select(c => c.Path).Distinct().Count());
+    }
+
+    [Fact]
+    public async Task FetchAsync_EveryAttemptFails_ThrowsLastReasonAfterMaxAttempts()
+    {
+        var a = Folder("a");
+        for (var i = 0; i < 5; i++)
+            Image(a, $"bad{i}.jpg");
+        var resizer = new RecordingResizer { Fails = _ => true };
+        var provider = new LocalImageProvider([a], resizer);
+
+        var ex = await Assert.ThrowsAsync<RandomBackgroundProviderException>(
+            () => provider.FetchAsync(100, 100, CancellationToken.None));
+
+        Assert.EndsWith("couldn't be read as an image", ex.Message);
+        Assert.Equal(LocalImageProvider.MaxAttempts, resizer.Calls.Count);
+    }
+
+    [Fact]
     public async Task FetchAsync_NoFoldersConfigured_ThrowsWithHowToAddOne()
     {
         var provider = new LocalImageProvider([], new RecordingResizer());
@@ -164,6 +222,19 @@ public class LocalImageProviderTests : IDisposable
         return path;
     }
 
+    private static bool TryCreateLink(Action create)
+    {
+        try
+        {
+            create();
+            return true;
+        }
+        catch (Exception ex) when (OperatingSystem.IsWindows() && ex is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_root))
@@ -176,9 +247,13 @@ public class LocalImageProviderTests : IDisposable
 
         public List<(string Path, int Width, int Height)> Calls { get; } = [];
 
+        public Func<string, bool> Fails { get; init; } = _ => false;
+
         public Task<RandomBackgroundImage> ResizeAsync(string path, int width, int height, CancellationToken cancellationToken)
         {
             Calls.Add((path, width, height));
+            if (Fails(path))
+                throw new RandomBackgroundProviderException($"'{path}' couldn't be read as an image");
             return Task.FromResult(new RandomBackgroundImage(Output, "image/jpeg"));
         }
     }

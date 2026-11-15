@@ -1,3 +1,5 @@
+using System.IO.Enumeration;
+
 namespace ImgForge.Core.RandomBackgrounds;
 
 /// <summary>
@@ -18,9 +20,13 @@ internal sealed class LocalImageProvider : IRandomBackgroundProvider
 
     private static readonly HashSet<string> SupportedExtensionSet = new(SupportedExtensions, StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>How many different images to try when one can't be resized (e.g. a corrupt or misnamed file).</summary>
+    internal const int MaxAttempts = 3;
+
     /// <summary>
     /// Recursive, skipping folders and files that can't be read, hidden or system entries, and absurdly deep trees.
-    /// Symbolic links to folders aren't followed, so a link loop can't make the search run forever.
+    /// Symbolic links (and junctions) to folders aren't followed (see <see cref="Enumerate"/>), so a link loop can't
+    /// repeat images or make the search run forever.
     /// </summary>
     private static readonly EnumerationOptions SearchOptions = new()
     {
@@ -64,8 +70,23 @@ internal sealed class LocalImageProvider : IRandomBackgroundProvider
                 $"{string.Join(", ", _directories.Select(d => $"'{d}'"))}; add images there, or {AddFolderHint}");
         }
 
-        var path = images[_random.Next(images.Count)];
-        return await _resizer.ResizeAsync(path, width, height, cancellationToken);
+        // A corrupt or misnamed file shouldn't fail the run when other images are there: try a few others.
+        RandomBackgroundProviderException? lastFailure = null;
+        for (var attempt = 0; attempt < MaxAttempts && images.Count > 0; attempt++)
+        {
+            var index = _random.Next(images.Count);
+            try
+            {
+                return await _resizer.ResizeAsync(images[index], width, height, cancellationToken);
+            }
+            catch (RandomBackgroundProviderException ex)
+            {
+                lastFailure = ex;
+                images.RemoveAt(index);
+            }
+        }
+
+        throw lastFailure!;
     }
 
     /// <summary>
@@ -75,8 +96,9 @@ internal sealed class LocalImageProvider : IRandomBackgroundProvider
     /// </summary>
     internal static List<string> FindImages(IEnumerable<string> directories, CancellationToken cancellationToken = default)
     {
-        var seen = new HashSet<string>(
-            OperatingSystem.IsWindows() || OperatingSystem.IsMacOS() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
+        // Exact match only: the same folder listed twice (or a folder and its parent) yields identical paths, and
+        // case-insensitive matching would wrongly drop files on case-sensitive volumes.
+        var seen = new HashSet<string>(StringComparer.Ordinal);
         var images = new List<string>();
 
         foreach (var directory in directories)
@@ -89,7 +111,7 @@ internal sealed class LocalImageProvider : IRandomBackgroundProvider
                 var root = new DirectoryInfo(directory);
                 if (!root.Exists)
                     continue;
-                files = root.EnumerateFiles("*", SearchOptions);
+                files = Enumerate(root.FullName);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or System.Security.SecurityException)
             {
@@ -103,7 +125,7 @@ internal sealed class LocalImageProvider : IRandomBackgroundProvider
                     cancellationToken.ThrowIfCancellationRequested();
                     if (!SupportedExtensionSet.Contains(file.Extension))
                         continue;
-                    if (file.Length == 0 || file.Length > HttpImageDownloader.MaxImageBytes)
+                    if (!IsUsableSize(file))
                         continue;
                     if (seen.Add(file.FullName))
                         images.Add(file.FullName);
@@ -117,5 +139,34 @@ internal sealed class LocalImageProvider : IRandomBackgroundProvider
 
         images.Sort(StringComparer.Ordinal);
         return images;
+    }
+
+    /// <summary>Files under <paramref name="directory"/>, recursively, without following links to folders.</summary>
+    private static FileSystemEnumerable<FileInfo> Enumerate(string directory) =>
+        new(directory, (ref FileSystemEntry entry) => (FileInfo)entry.ToFileSystemInfo(), SearchOptions)
+        {
+            ShouldIncludePredicate = (ref FileSystemEntry entry) => !entry.IsDirectory,
+            ShouldRecursePredicate = (ref FileSystemEntry entry) => (entry.Attributes & FileAttributes.ReparsePoint) == 0,
+        };
+
+    /// <summary>
+    /// True when the file (or, for a link, the file it points to) exists, isn't empty, and is at most
+    /// <see cref="HttpImageDownloader.MaxImageBytes"/>. Broken links are skipped.
+    /// </summary>
+    private static bool IsUsableSize(FileInfo file)
+    {
+        try
+        {
+            var target = file.LinkTarget is null ? file : file.ResolveLinkTarget(returnFinalTarget: true) as FileInfo;
+            return target is { Exists: true, Length: > 0 and <= HttpImageDownloader.MaxImageBytes };
+        }
+        catch (IOException)
+        {
+            return false; // e.g. a link loop
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return false;
+        }
     }
 }
