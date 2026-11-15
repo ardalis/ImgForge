@@ -140,8 +140,10 @@ public sealed class UserSetting
     {
         if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || (uri.Scheme != Uri.UriSchemeHttps && uri.Scheme != Uri.UriSchemeHttp))
             throw new ArgumentException($"\"{url}\" isn't an HTTP(S) URL. Use a Dropbox shared-folder link such as https://www.dropbox.com/scl/fo/....");
-        if (RandomBackgrounds.DropboxProvider.DownloadUrl(url) is null)
-            throw new ArgumentException($"\"{url}\" isn't a Dropbox link. Use a Dropbox shared-folder link such as https://www.dropbox.com/scl/fo/....");
+        var download = RandomBackgrounds.DropboxProvider.DownloadUrl(url)
+            ?? throw new ArgumentException($"\"{url}\" isn't a Dropbox link. Use a Dropbox shared-folder link such as https://www.dropbox.com/scl/fo/....");
+        if (RandomBackgrounds.DropboxProvider.IsFileLink(download))
+            throw new ArgumentException($"\"{url}\" is a link to a single file. Share the folder and use its link (https://www.dropbox.com/scl/fo/...).");
         return url;
     }
 }

@@ -131,6 +131,18 @@ public sealed class ConfigCommandTests : IDisposable
         Assert.False(Store.Exists);
     }
 
+    [Theory]
+    [InlineData("https://www.dropbox.com/scl/fi/abc/photo.jpg?rlkey=k&dl=0")]
+    [InlineData("https://www.dropbox.com/s/abc/photo.jpg?dl=0")]
+    public async Task Add_DropboxFileLink_FailsAskingForTheFolderLink(string value)
+    {
+        var (exitCode, _, stderr) = await InvokeAsync("config", "add", "dropbox-folders", value);
+
+        Assert.Equal(1, exitCode);
+        Assert.Contains("is a link to a single file", stderr);
+        Assert.False(Store.Exists);
+    }
+
     [Fact]
     public async Task Add_Duplicate_DoesNotAddTwice()
     {

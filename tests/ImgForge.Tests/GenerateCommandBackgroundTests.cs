@@ -133,7 +133,7 @@ public class GenerateCommandBackgroundTests
 
         Assert.Empty(sources.Directories);
         Assert.Empty(sources.DropboxFolders);
-        Assert.StartsWith("Warning: couldn't read your image folders, so they won't be used:", warnings.ToString());
+        Assert.StartsWith("Warning: couldn't read your image and Dropbox folders, so they won't be used:", warnings.ToString());
     }
 
     [Theory]

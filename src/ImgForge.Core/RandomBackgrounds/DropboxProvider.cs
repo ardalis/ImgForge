@@ -63,18 +63,19 @@ internal sealed class DropboxProvider : IRandomBackgroundProvider
     /// The first download of a big folder can take a while, so this provider gets longer than the resolver's usual
     /// per-provider limit. A site that doesn't respond still fails within <see cref="ResponseTimeout"/>.
     /// </summary>
-    public TimeSpan? TimeLimit { get; init; } = TimeSpan.FromMinutes(3);
-
-    /// <summary>How long Dropbox has to start responding.</summary>
-    public TimeSpan ResponseTimeout { get; init; } = HttpImageDownloader.DefaultResponseTimeout;
+    public TimeSpan? TimeLimit { get; init; } = TimeSpan.FromMinutes(10);
 
     /// <summary>
-    /// When an older copy of a folder is cached, how long a refresh may take before the older copy is used instead.
+    /// How long Dropbox has to start responding (through its redirect to the download server). When an older copy is
+    /// cached, a refresh that doesn't start in time uses the older copy instead.
     /// </summary>
-    public TimeSpan RefreshTimeout { get; init; } = TimeSpan.FromSeconds(30);
+    public TimeSpan ResponseTimeout { get; init; } = TimeSpan.FromSeconds(15);
 
     /// <summary>How long a downloaded folder is used before it is downloaded again.</summary>
     public TimeSpan CacheLifetime { get; init; } = TimeSpan.FromHours(24);
+
+    /// <summary>After a refresh fails and the older copy is used, how long until the next refresh is tried.</summary>
+    public TimeSpan RetryAfterFailedRefresh { get; init; } = TimeSpan.FromHours(1);
 
     /// <summary>The largest folder download (zip) accepted.</summary>
     public long MaxArchiveBytes { get; init; } = 2L * 1024 * 1024 * 1024;
@@ -105,7 +106,8 @@ internal sealed class DropboxProvider : IRandomBackgroundProvider
 
     /// <summary>
     /// The URL that downloads <paramref name="link"/> as a zip: the same https Dropbox link with <c>dl=1</c> (other
-    /// query parameters such as <c>rlkey</c> are kept). <c>null</c> when it isn't a dropbox.com link.
+    /// query parameters such as <c>rlkey</c> are kept). <c>null</c> when it isn't a dropbox.com link. (A link to a
+    /// single file is still returned; see <see cref="IsFileLink"/>.)
     /// </summary>
     internal static Uri? DownloadUrl(string? link)
     {
@@ -128,6 +130,20 @@ internal sealed class DropboxProvider : IRandomBackgroundProvider
         }.Uri;
     }
 
+    /// <summary>True when <paramref name="url"/> is a Dropbox link to a single file (<c>/scl/fi/</c> or <c>/s/</c>), not a folder.</summary>
+    internal static bool IsFileLink(Uri url) =>
+        url.AbsolutePath.StartsWith("/scl/fi/", StringComparison.OrdinalIgnoreCase) ||
+        url.AbsolutePath.StartsWith("/s/", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>True for Dropbox's own hosts, which a folder download may redirect to.</summary>
+    private static bool IsDropboxHost(string host) =>
+        Hosts.Any(h => host.Equals(h, StringComparison.OrdinalIgnoreCase)) ||
+        host.EndsWith(".dropbox.com", StringComparison.OrdinalIgnoreCase) ||
+        host.EndsWith(".dropboxusercontent.com", StringComparison.OrdinalIgnoreCase);
+
+    private const string FileLinkReason =
+        "the link is to a single file, not a folder; share the folder and add that link instead";
+
     /// <summary>The cache file for a download URL: a hash of it, so the link (and its key) isn't in the file name.</summary>
     internal string CachePath(Uri downloadUrl) =>
         Path.Combine(CacheDirectory,
@@ -138,28 +154,10 @@ internal sealed class DropboxProvider : IRandomBackgroundProvider
         if (_folders.Count == 0)
             throw new RandomBackgroundProviderException($"no Dropbox folders are configured; {AddFolderHint}");
 
-        var failures = new List<string>();
-        var images = new List<(string Archive, string Entry, string Folder)>();
-        for (var i = 0; i < _folders.Count; i++)
-        {
-            var folder = FolderLabel(i);
-            try
-            {
-                var url = DownloadUrl(_folders[i]) ?? throw new RandomBackgroundProviderException(
-                    "the link isn't a Dropbox shared-folder link (https://www.dropbox.com/...)");
-                var archive = await GetArchiveAsync(url, cancellationToken);
-                images.AddRange(FindImages(archive).Select(entry => (archive, entry, folder)));
-            }
-            catch (RandomBackgroundProviderException ex)
-            {
-                failures.Add(Describe(folder, ex.Message));
-            }
-            catch (HttpRequestException ex)
-            {
-                failures.Add(Describe(folder,
-                    $"the site could not be reached ({ex.GetBaseException().Message.TrimEnd('.', ' ')})"));
-            }
-        }
+        // Folders are fetched at the same time, so one slow folder doesn't use up the others' time.
+        var results = await Task.WhenAll(_folders.Select((link, i) => LoadFolderAsync(link, FolderLabel(i), cancellationToken)));
+        var failures = results.Where(r => r.Failure is not null).Select(r => r.Failure!).ToList();
+        var images = results.SelectMany(r => r.Images).ToList();
 
         if (images.Count == 0)
         {
@@ -194,7 +192,28 @@ internal sealed class DropboxProvider : IRandomBackgroundProvider
 
     private string FolderLabel(int index) => _folders.Count == 1 ? "the Dropbox folder" : $"Dropbox folder {index + 1}";
 
-    private static string Describe(string folder, string reason) => $"{folder}: {reason}";
+    /// <summary>Every image in one folder, or why the folder couldn't be used.</summary>
+    private async Task<(List<(string Archive, string Entry, string Folder)> Images, string? Failure)> LoadFolderAsync(
+        string link, string folder, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var url = DownloadUrl(link) ?? throw new RandomBackgroundProviderException(
+                "the link isn't a Dropbox shared-folder link (https://www.dropbox.com/...)");
+            if (IsFileLink(url))
+                throw new RandomBackgroundProviderException(FileLinkReason);
+            var archive = await GetArchiveAsync(url, cancellationToken);
+            return (FindImages(archive).Select(entry => (archive, entry, folder)).ToList(), null);
+        }
+        catch (RandomBackgroundProviderException ex)
+        {
+            return ([], $"{folder}: {ex.Message}");
+        }
+        catch (HttpRequestException ex)
+        {
+            return ([], $"{folder}: the site could not be reached ({ex.GetBaseException().Message.TrimEnd('.', ' ')})");
+        }
+    }
 
     /// <summary>The cached zip for <paramref name="url"/>, downloading it first when missing or older than <see cref="CacheLifetime"/>.</summary>
     private async Task<string> GetArchiveAsync(Uri url, CancellationToken cancellationToken)
@@ -211,16 +230,22 @@ internal sealed class DropboxProvider : IRandomBackgroundProvider
             return cachePath;
 
         // An older copy is there: refresh it, but fall back to it (e.g. offline) rather than fail.
-        using var refresh = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        refresh.CancelAfter(RefreshTimeout);
         try
         {
-            await DownloadAsync(url, cachePath, refresh.Token);
+            await DownloadAsync(url, cachePath, cancellationToken);
         }
-        catch (Exception ex) when (ex is RandomBackgroundProviderException or HttpRequestException ||
-            (ex is OperationCanceledException && !cancellationToken.IsCancellationRequested))
+        catch (Exception ex) when (ex is RandomBackgroundProviderException or HttpRequestException)
         {
-            // Keep using the older copy.
+            // Keep using the older copy, and don't try again on every run: back off for a while.
+            try
+            {
+                File.SetLastWriteTimeUtc(cachePath,
+                    DateTime.UtcNow - CacheLifetime + TimeSpan.FromTicks(Math.Min(RetryAfterFailedRefresh.Ticks, CacheLifetime.Ticks)));
+            }
+            catch (Exception touch) when (touch is IOException or UnauthorizedAccessException)
+            {
+                // Best effort.
+            }
         }
         return cachePath;
     }
@@ -236,39 +261,56 @@ internal sealed class DropboxProvider : IRandomBackgroundProvider
         if (!response.IsSuccessStatusCode)
             throw new RandomBackgroundProviderException(DescribeFailure(response.StatusCode));
 
+        // Dropbox redirects to its download server; don't save what some other site sent.
+        if (response.RequestMessage?.RequestUri is { } finalUrl && !IsDropboxHost(finalUrl.Host))
+            throw new RandomBackgroundProviderException("the link redirected to a site other than Dropbox");
+
         var mediaType = response.Content.Headers.ContentType?.MediaType;
         if (mediaType is not null && mediaType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
-            throw new RandomBackgroundProviderException(
-                "the link is to a single file, not a folder; share the folder and add that link instead");
+            throw new RandomBackgroundProviderException(FileLinkReason);
         if (mediaType is not null && mediaType.StartsWith("text/", StringComparison.OrdinalIgnoreCase))
             throw new RandomBackgroundProviderException(NotAFolderDownload);
         if (response.Content.Headers.ContentLength > MaxArchiveBytes)
             throw new RandomBackgroundProviderException(TooLarge);
 
+        var tempPath = Path.Combine(CacheDirectory, $"{TempFilePrefix}{Guid.NewGuid():N}.tmp");
         try
         {
-            Directory.CreateDirectory(CacheDirectory);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            throw new RandomBackgroundProviderException(
-                $"the download couldn't be saved in '{CacheDirectory}' ({ex.Message.TrimEnd('.', ' ')})");
-        }
-
-        var tempPath = Path.Combine(CacheDirectory, $"download-{Guid.NewGuid():N}.tmp");
-        try
-        {
+            CreateCacheDirectory();
             await using (var file = new FileStream(tempPath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
             {
+                Stream body;
                 try
                 {
-                    await using var body = await response.Content.ReadAsStreamAsync(cancellationToken);
-                    await CopyBoundedAsync(body, file, MaxArchiveBytes, TooLarge, cancellationToken);
+                    body = await response.Content.ReadAsStreamAsync(cancellationToken);
                 }
-                catch (IOException ex) when (ex is not FileNotFoundException)
+                catch (IOException ex)
                 {
-                    throw new RandomBackgroundProviderException(
-                        $"the connection was lost while downloading the folder ({ex.GetBaseException().Message.TrimEnd('.', ' ')})");
+                    throw ConnectionLost(ex);
+                }
+
+                await using (body)
+                {
+                    var buffer = new byte[81920];
+                    long total = 0;
+                    while (true)
+                    {
+                        int read;
+                        try
+                        {
+                            read = await body.ReadAsync(buffer, cancellationToken);
+                        }
+                        catch (IOException ex)
+                        {
+                            throw ConnectionLost(ex);
+                        }
+                        if (read == 0)
+                            break;
+                        total += read;
+                        if (total > MaxArchiveBytes)
+                            throw new RandomBackgroundProviderException(TooLarge);
+                        await file.WriteAsync(buffer.AsMemory(0, read), cancellationToken);
+                    }
                 }
             }
 
@@ -282,9 +324,38 @@ internal sealed class DropboxProvider : IRandomBackgroundProvider
                 // e.g. another ImgForge run has the cached copy open (Windows); that copy is just as good.
             }
         }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // e.g. the cache folder isn't writable, or the disk is full.
+            throw new RandomBackgroundProviderException(
+                $"the download couldn't be saved in '{CacheDirectory}' ({ex.Message.TrimEnd('.', ' ')})");
+        }
         finally
         {
             RandomBackgroundResolver.TryDelete(tempPath);
+        }
+    }
+
+    private const string TempFilePrefix = "download-";
+
+    private static RandomBackgroundProviderException ConnectionLost(IOException ex) =>
+        new($"the connection was lost while downloading the folder ({ex.GetBaseException().Message.TrimEnd('.', ' ')})");
+
+    /// <summary>
+    /// Creates the cache folder (owner-only on Linux and macOS, since downloads may be private) and removes partial
+    /// downloads left behind by runs that were killed.
+    /// </summary>
+    private void CreateCacheDirectory()
+    {
+        if (OperatingSystem.IsWindows())
+            Directory.CreateDirectory(CacheDirectory);
+        else
+            Directory.CreateDirectory(CacheDirectory, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+
+        foreach (var leftover in new DirectoryInfo(CacheDirectory).EnumerateFiles($"{TempFilePrefix}*.tmp"))
+        {
+            if (DateTime.UtcNow - leftover.LastWriteTimeUtc > TimeSpan.FromDays(1))
+                RandomBackgroundResolver.TryDelete(leftover.FullName);
         }
     }
 
@@ -299,7 +370,8 @@ internal sealed class DropboxProvider : IRandomBackgroundProvider
     };
 
     private const string NotAFolderDownload =
-        "the link didn't download a folder; check that it's a Dropbox shared-folder link";
+        "the link didn't download a folder; check that it's a Dropbox shared-folder link " +
+        "(and that the folder isn't too big for Dropbox to download as a zip)";
 
     private string TooLarge => $"the folder download is larger than {MaxArchiveBytes / (1024 * 1024)} MB";
 

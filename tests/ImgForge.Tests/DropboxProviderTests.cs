@@ -152,10 +152,81 @@ public class DropboxProviderTests : IDisposable
         {
             CacheDirectory = CacheDir,
             TempDirectory = TempDir,
-            RefreshTimeout = TimeSpan.FromMilliseconds(50),
+            ResponseTimeout = TimeSpan.FromMilliseconds(50),
         };
 
         var image = await provider.FetchAsync(10, 10, CancellationToken.None);
+
+        Assert.Equal(RecordingResizer.Output, image.Content);
+    }
+
+    [Fact]
+    public async Task FetchAsync_RefreshFails_BacksOffInsteadOfRetryingEveryRun()
+    {
+        await Provider([LinkA], Serve(new() { [LinkA] = Zip(("a.jpg", 1)) })).FetchAsync(10, 10, CancellationToken.None);
+        Age(Assert.Single(Directory.GetFiles(CacheDir)), TimeSpan.FromDays(3));
+        var offline = new FakeHttpMessageHandler((_, _) => throw new HttpRequestException("No such host is known."));
+
+        await Provider([LinkA], offline).FetchAsync(10, 10, CancellationToken.None);
+        await Provider([LinkA], offline).FetchAsync(10, 10, CancellationToken.None);
+
+        Assert.Single(offline.Requests);
+    }
+
+    [Fact]
+    public async Task FetchAsync_CacheFolderNotWritable_ThrowsProviderExceptionSoFallbackContinues()
+    {
+        // A file where the cache folder should be: creating the folder (and the download) fails.
+        File.WriteAllText(CacheDir, "in the way");
+        var handler = Serve(new() { [LinkA] = Zip(("a.jpg", 1)) });
+
+        var ex = await Assert.ThrowsAsync<RandomBackgroundProviderException>(
+            () => Provider([LinkA], handler).FetchAsync(10, 10, CancellationToken.None));
+
+        Assert.StartsWith($"the Dropbox folder: the download couldn't be saved in '{CacheDir}'", ex.Message);
+    }
+
+    [Fact]
+    public async Task FetchAsync_FileLink_ThrowsWithoutDownloading()
+    {
+        var handler = Serve(new());
+
+        var ex = await Assert.ThrowsAsync<RandomBackgroundProviderException>(
+            () => Provider(["https://www.dropbox.com/scl/fi/abc/photo.jpg?rlkey=k"], handler).FetchAsync(10, 10, CancellationToken.None));
+
+        Assert.Contains("the link is to a single file, not a folder", ex.Message);
+        Assert.Empty(handler.Requests);
+    }
+
+    [Fact]
+    public async Task FetchAsync_RedirectedToAnotherSite_ThrowsAndCachesNothing()
+    {
+        var handler = new FakeHttpMessageHandler((_, _) =>
+        {
+            var response = ZipResponse(Zip(("a.jpg", 1)));
+            response.RequestMessage = new HttpRequestMessage(HttpMethod.Get, "https://evil.example/folder.zip");
+            return Task.FromResult(response);
+        });
+
+        var ex = await Assert.ThrowsAsync<RandomBackgroundProviderException>(
+            () => Provider([LinkA], handler).FetchAsync(10, 10, CancellationToken.None));
+
+        Assert.Equal("the Dropbox folder: the link redirected to a site other than Dropbox", ex.Message);
+        Assert.False(Directory.Exists(CacheDir));
+    }
+
+    [Fact]
+    public async Task FetchAsync_RedirectedToDropboxDownloadServer_IsAccepted()
+    {
+        var handler = new FakeHttpMessageHandler((_, _) =>
+        {
+            var response = ZipResponse(Zip(("a.jpg", 1)));
+            response.RequestMessage = new HttpRequestMessage(
+                HttpMethod.Get, "https://uc1234.dl.dropboxusercontent.com/zip_download_get/abc");
+            return Task.FromResult(response);
+        });
+
+        var image = await Provider([LinkA], handler).FetchAsync(10, 10, CancellationToken.None);
 
         Assert.Equal(RecordingResizer.Output, image.Content);
     }
@@ -188,7 +259,7 @@ public class DropboxProviderTests : IDisposable
         var ex = await Assert.ThrowsAsync<RandomBackgroundProviderException>(
             () => Provider([LinkA], handler).FetchAsync(10, 10, CancellationToken.None));
 
-        Assert.Equal("the Dropbox folder: the link didn't download a folder; check that it's a Dropbox shared-folder link", ex.Message);
+        Assert.StartsWith("the Dropbox folder: the link didn't download a folder; check that it's a Dropbox shared-folder link", ex.Message);
     }
 
     [Fact]
@@ -210,7 +281,7 @@ public class DropboxProviderTests : IDisposable
         var ex = await Assert.ThrowsAsync<RandomBackgroundProviderException>(
             () => Provider([LinkA], handler).FetchAsync(10, 10, CancellationToken.None));
 
-        Assert.EndsWith("the link didn't download a folder; check that it's a Dropbox shared-folder link", ex.Message);
+        Assert.Contains("the link didn't download a folder; check that it's a Dropbox shared-folder link", ex.Message);
         Assert.Empty(Directory.GetFiles(CacheDir));
     }
 

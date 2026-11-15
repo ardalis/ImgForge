@@ -287,7 +287,7 @@ public static class GenerateCommand
         catch (Exception ex) when (only is null && ex is InvalidDataException or InvalidOperationException or IOException or UnauthorizedAccessException)
         {
             // Plain --bg random still works without your folders.
-            warnings.WriteLine($"Warning: couldn't read your image folders, so they won't be used: {ex.Message}");
+            warnings.WriteLine($"Warning: couldn't read your image and Dropbox folders, so they won't be used: {ex.Message}");
             return ImageSources.None;
         }
 

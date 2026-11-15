@@ -184,10 +184,13 @@ files at random, each image in every folder equally likely. Hidden files, macOS 
 and files over 50 MB are skipped. Only `dropbox.com` links are accepted, and they're always fetched over HTTPS.
 
 Each folder's download is cached in `cache/dropbox` next to the settings file (`~/.imgforge/cache/dropbox`) and
-downloaded again after 24 hours, so most runs don't download anything. If that refresh fails or takes over 30 seconds
-and an older copy is cached, the older copy is used, so it keeps working offline. The first download of a big folder
-may take up to 3 minutes; folder downloads over 2 GB are refused. To pick up new images right away, delete the cache
-folder. If one folder can't be downloaded, images from the others are still used.
+downloaded again after 24 hours, so most runs don't download anything. Folders are downloaded at the same time. If a
+refresh fails (e.g. you're offline, or Dropbox doesn't start responding within 15 seconds) and an older copy is cached,
+the older copy is used and the refresh is tried again an hour later. A download may take up to 10 minutes in all;
+folder downloads over 2 GB are refused, and Dropbox itself won't zip very large folders. Links to a single file
+(`/scl/fi/...`) are rejected; share the folder instead. To pick up new images right away, or to free the space used by
+folders you've removed, delete the cache folder. If one folder can't be downloaded, images from the others are still
+used.
 
 The chosen image is cropped and scaled to the output size on your machine, the same way as
 [local images](#local-image-folders). Plain `random` uses your Dropbox folders after the online photo providers and
