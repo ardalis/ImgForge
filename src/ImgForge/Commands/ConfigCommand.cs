@@ -39,7 +39,7 @@ internal static class ConfigCommand
             {
                 console.Error.WriteLine(
                     "Note: the settings file has settings ImgForge no longer uses (such as dropboxFolders). They're ignored and " +
-                    "will be removed the next time 'imgforge config add', 'remove', or 'clear' saves the file.");
+                    "will be removed the next time ImgForge saves the file, or run 'imgforge config clear' to delete the whole file now.");
             }
             console.Out.WriteLine(store.Exists
                 ? $"Settings file: {store.FilePath}"

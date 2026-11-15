@@ -14,7 +14,7 @@ planned, so nothing reads the setting. Remove it from code, help, tests, and REA
   printed by `config show` and is gone from disk the next time ImgForge saves the file. Links may contain an `rlkey`
   access key, so dropping beats keeping it as an unknown property.
 - Since `show` doesn't write, it prints a note to stderr when the file still has `dropboxFolders`, saying it's ignored
-  and will be removed the next time a `config add/remove/clear` saves the file (or `config clear` deletes it).
+  and will be removed the next time ImgForge saves the file, or that `imgforge config clear` deletes the file now.
 - **CLI:** `config add/remove/clear dropbox-folders` fails with a clear message: the setting was removed; sync the
   folder with the Dropbox desktop app and add its local path with `imgforge config add image-directories <path>`.
   Implemented as a custom validator on the setting argument (replacing `FromAmong`, keeping tab completions), so
@@ -26,7 +26,7 @@ planned, so nothing reads the setting. Remove it from code, help, tests, and REA
 - [x] Remove `UserSetting.DropboxFolders`, `NormalizeHttpUrl`, and its `All` entry.
 - [x] Remove `UserSettings.DropboxFolders`.
 - [x] `UserSettingsStore.Load` strips retired properties (`dropboxFolders`, case-insensitive) from
-      `AdditionalProperties` and records that it did (`UserSettings.HadRetiredSettings`, `[JsonIgnore]`).
+      `AdditionalProperties` and records that it did (`UserSettings.HadRemovedSettings`, `[JsonIgnore]`).
 
 ## Phase 2 — CLI
 
@@ -50,13 +50,23 @@ planned, so nothing reads the setting. Remove it from code, help, tests, and REA
 
 ## Phase 5 — Independent review
 
-- [ ] Separate agent reviews the full diff (correctness, scope vs. issue, tests, security, performance, accessibility).
-- [ ] Address all significant findings (record any skipped ones below).
+- [x] Separate agent reviews the full diff (correctness, scope vs. issue, tests, security, performance, accessibility).
+- [x] Address all significant findings (record any skipped ones below).
 
 ## Phase 6 — Verification
 
-- [ ] `dotnet BuildTestFormat.cs` passes (build, tests, format).
+- [x] `dotnet BuildTestFormat.cs` passes (build, tests, format).
 
 ## Review notes
 
-(filled in after review)
+Independent review (fresh agent) findings:
+
+- Fixed: `docs/content/docs/usage/settings.md` still documented `dropbox-folders` (row, example, rlkey note, stale
+  #41/#42 sentence). Updated to match README.
+- Fixed: the `config show` note promised removal on the next `add`/`remove`/`clear`, but no-op runs (duplicate add,
+  failed remove, clearing an empty setting) don't save. The note and docs now say "the next time ImgForge saves the
+  file, or run `imgforge config clear` to delete the whole file now".
+- Fixed: added a tab-completion test for the setting argument (completions replaced `FromAmong`).
+- Fixed: plan named the flag `HadRetiredSettings`; code uses `HadRemovedSettings`.
+- Not changed: `Dropbox-Folders` (other casing) gets the generic "not recognized" error. Setting names were always
+  case-sensitive, so this isn't a regression.

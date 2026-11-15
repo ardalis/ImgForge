@@ -50,6 +50,7 @@ public sealed class ConfigCommandTests : IDisposable
         Assert.DoesNotContain("dropbox", stdout, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("\"/t\"", stdout);
         Assert.Contains("no longer uses (such as dropboxFolders)", stderr);
+        Assert.Contains("'imgforge config clear'", stderr);
     }
 
     [Theory]
@@ -68,6 +69,22 @@ public sealed class ConfigCommandTests : IDisposable
         Assert.Contains("imgforge config add image-directories", stderr);
         Assert.DoesNotContain("not recognized", stderr);
         Assert.Equal(before, File.ReadAllText(Store.FilePath));
+    }
+
+    [Theory]
+    [InlineData("add")]
+    [InlineData("remove")]
+    [InlineData("clear")]
+    public void SettingArgument_CompletesValidSettingNamesOnly(string subcommand)
+    {
+        var completions = Cli.BuildParser(Store).Parse($"config {subcommand} ")
+            .GetCompletions($"config {subcommand} ".Length)
+            .Select(c => c.Label)
+            .ToList();
+
+        Assert.Contains("image-directories", completions);
+        Assert.Contains("templates", completions);
+        Assert.DoesNotContain("dropbox-folders", completions);
     }
 
     [Fact]

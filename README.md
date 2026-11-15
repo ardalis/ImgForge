@@ -272,8 +272,8 @@ path doesn't exist yet. You can also edit the file by hand; settings ImgForge do
 rewrites the file. If the file isn't valid JSON, `imgforge config clear` deletes it so you can start over.
 
 Earlier versions had a `dropbox-folders` setting that was never used; it has been removed. A `dropboxFolders` entry
-left in an existing settings file is ignored, isn't shown by `config show`, and is deleted the next time
-`config add`, `remove`, or `clear` saves the file.
+left in an existing settings file is ignored and isn't shown by `config show`. It's deleted the next time ImgForge
+saves the file, or run `imgforge config clear` to delete the whole file now.
 
 ## Image Dimension Reference
 
