@@ -8,7 +8,8 @@ namespace ImgForge.Core.RandomBackgrounds;
 /// Providers are tried in order and the first one that returns a usable image wins. A provider that fails (HTTP
 /// error, no response, non-image content, network error, or a download that takes too long) is skipped and the next
 /// one is tried. Each provider enforces its own short "start responding" timeout (about 5 seconds), and the resolver
-/// caps each provider's whole download at <see cref="DownloadTimeout"/>, so one dead provider can't use up the budget.
+/// caps each provider's whole download at <see cref="DownloadTimeout"/> (plus <see cref="LocalImageProvider.ReadTimeout"/>
+/// for local image folders), so one dead provider can't use up the budget.
 /// </remarks>
 internal sealed class RandomBackgroundResolver
 {
@@ -105,8 +106,10 @@ internal sealed class RandomBackgroundResolver
     private async Task<(RandomBackgroundImage? Image, string? FailureReason)> TryFetchAsync(
         IRandomBackgroundProvider provider, int width, int height, CancellationToken cancellationToken)
     {
+        // The local provider reads the chosen file (downloading an online-only cloud file) under its own ReadTimeout.
+        var limit = provider is LocalImageProvider local ? DownloadTimeout + local.ReadTimeout : DownloadTimeout;
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeout.CancelAfter(DownloadTimeout);
+        timeout.CancelAfter(limit);
 
         try
         {
@@ -115,8 +118,8 @@ internal sealed class RandomBackgroundResolver
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested && timeout.IsCancellationRequested)
         {
             return (null, provider is LocalImageProvider
-                ? $"the image could not be found and resized within {HttpImageDownloader.FormatSeconds(DownloadTimeout)}"
-                : $"the image did not finish downloading within {HttpImageDownloader.FormatSeconds(DownloadTimeout)}");
+                ? $"the image could not be found and resized within {HttpImageDownloader.FormatSeconds(limit)}"
+                : $"the image did not finish downloading within {HttpImageDownloader.FormatSeconds(limit)}");
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
