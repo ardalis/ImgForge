@@ -107,7 +107,9 @@ public class CliHelpTests
 
         foreach (var subcommand in new[] { "show", "path", "add", "remove", "clear" })
             Assert.Contains($"  {subcommand}", help);
-        Assert.Contains("~/.imgforge/settings.json", help);
+        Assert.Contains(".imgforge/settings.json", help);
+        foreach (var setting in ImgForge.Core.Configuration.UserSetting.All)
+            Assert.Contains(setting.Name, help);
         Assert.Contains("IMGFORGE_CONFIG_DIR", help);
 
         var examplesAt = help.IndexOf("Examples:", StringComparison.Ordinal);
@@ -129,7 +131,7 @@ public class CliHelpTests
         }
 
         // "path" just prints the location; "show" covers that in the examples.
-        Assert.Equal(["show", "add", "remove", "clear"], used);
+        Assert.Equivalent(new[] { "show", "add", "remove", "clear" }, used, strict: true);
     }
 
     [Fact]

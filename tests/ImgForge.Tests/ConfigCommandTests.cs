@@ -236,10 +236,36 @@ public sealed class ConfigCommandTests : IDisposable
         Assert.False(Store.Exists);
     }
 
-    [Fact]
-    public void Find_IsCaseInsensitiveAndRejectsUnknownNames()
+    [Theory]
+    [InlineData("/hand/edited/", "/hand/edited")]
+    [InlineData("/hand/edited", "/hand/edited/")]
+    [InlineData("~/hand-edited", "~/hand-edited")]
+    public async Task Remove_HandEditedPath_MatchesAsTypedOrNormalized(string stored, string argument)
     {
-        Assert.Same(UserSetting.DropboxFolders, UserSetting.Find("Dropbox-Folders"));
+        Store.Save(new UserSettings { ImageDirectories = [stored, "/keep"] });
+
+        var (exitCode, stdout, _) = await InvokeAsync("config", "remove", "image-directories", argument);
+
+        Assert.Equal(0, exitCode);
+        Assert.Contains($"Removed '{stored}' from image-directories.", stdout);
+        Assert.Equal(["/keep"], Store.Load().ImageDirectories);
+    }
+
+    [Fact]
+    public async Task Remove_HandEditedInvalidUrl_CanStillBeRemoved()
+    {
+        Store.Save(new UserSettings { DropboxFolders = ["junk"] });
+
+        var (exitCode, _, _) = await InvokeAsync("config", "remove", "dropbox-folders", "junk");
+
+        Assert.Equal(0, exitCode);
+        Assert.Empty(Store.Load().DropboxFolders);
+    }
+
+    [Fact]
+    public void Find_RejectsUnknownNames()
+    {
+        Assert.Same(UserSetting.DropboxFolders, UserSetting.Find("dropbox-folders"));
 
         var ex = Assert.Throws<ArgumentException>(() => UserSetting.Find("nope"));
         Assert.Contains("image-directories, dropbox-folders, templates", ex.Message);

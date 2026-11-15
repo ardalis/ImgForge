@@ -23,15 +23,14 @@ internal static class ConfigCommand
 
     private static readonly string[] SettingNames = [.. UserSetting.All.Select(s => s.Name)];
 
-    private static readonly string SettingsDescription =
-        string.Join("; ", UserSetting.All.Select(s => $"{s.Name}: {s.Description}"));
-
     /// <param name="createStore">Creates the store when a command runs (so the environment is read then, not at startup).</param>
     public static Command Build(Func<UserSettingsStore> createStore)
     {
         var config = new Command("config",
-            $"View, change, or clear your ImgForge settings, stored as JSON in ~/{UserSettingsStore.DefaultDirectoryName}/{UserSettingsStore.FileName} " +
-            $"(or in the folder named by the {UserSettingsStore.DirectoryEnvironmentVariable} environment variable).");
+            $"View, change, or clear your ImgForge settings, stored as JSON in {UserSettingsStore.DefaultDirectoryName}/{UserSettingsStore.FileName} " +
+            $"in your user profile folder (or in the folder named by the {UserSettingsStore.DirectoryEnvironmentVariable} environment variable; " +
+            $"run 'imgforge config path' to see where). Settings: " +
+            string.Join("; ", UserSetting.All.Select(s => $"{s.Name} ({s.Description})")) + ".");
 
         var show = new Command("show", "Show the settings file location and the current settings as JSON.");
         show.SetHandler(context => Run(context, createStore, (store, console) =>
@@ -48,7 +47,7 @@ internal static class ConfigCommand
 
         var addSetting = SettingArgument();
         var addValue = new Argument<string>("value", "The folder, URL, or template path to add. Paths are stored as full paths.");
-        var add = new Command("add", $"Add a value to a setting. Settings: {SettingsDescription}.") { addSetting, addValue };
+        var add = new Command("add", "Add a value to a setting.") { addSetting, addValue };
         add.SetHandler(context => Run(context, createStore, (store, console) =>
         {
             var setting = UserSetting.Find(context.ParseResult.GetValueForArgument(addSetting));
@@ -75,19 +74,22 @@ internal static class ConfigCommand
         remove.SetHandler(context => Run(context, createStore, (store, console) =>
         {
             var setting = UserSetting.Find(context.ParseResult.GetValueForArgument(removeSetting));
-            var value = setting.Normalize(context.ParseResult.GetValueForArgument(removeValue));
+            var value = context.ParseResult.GetValueForArgument(removeValue);
             var settings = store.Load();
             var values = setting.GetValues(settings);
 
-            if (values.RemoveAll(v => setting.Comparer.Equals(v, value)) == 0)
+            var removed = values.Where(v => setting.Matches(v, value)).ToList();
+            if (removed.Count == 0)
             {
-                console.Error.WriteLine($"Error: {setting.Name} doesn't contain '{value}'.");
+                console.Error.WriteLine($"Error: {setting.Name} doesn't contain '{value.Trim()}'.");
                 context.ExitCode = 1;
                 return;
             }
 
+            values.RemoveAll(removed.Contains);
             store.Save(settings);
-            console.Out.WriteLine($"Removed '{value}' from {setting.Name}.");
+            foreach (var r in removed)
+                console.Out.WriteLine($"Removed '{r}' from {setting.Name}.");
         }));
 
         var clearSetting = SettingArgument();
@@ -128,7 +130,7 @@ internal static class ConfigCommand
     }
 
     private static Argument<string> SettingArgument() =>
-        new Argument<string>("setting", $"The setting to change: {string.Join(", ", SettingNames)}.")
+        new Argument<string>("setting", $"The setting to change: {string.Join(", ", SettingNames)}.") { HelpName = "setting" }
             .FromAmong(SettingNames);
 
     private static void Run(InvocationContext context, Func<UserSettingsStore> createStore, Action<UserSettingsStore, IConsole> action)

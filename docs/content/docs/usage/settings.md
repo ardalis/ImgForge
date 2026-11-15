@@ -30,3 +30,6 @@ imgforge config clear                                  # delete the settings fil
 Relative paths are stored as full paths, so they keep working from any folder. `add` warns, but still saves, when a
 path doesn't exist yet. You can also edit the file by hand; settings ImgForge doesn't recognize are kept when it
 rewrites the file. If the file isn't valid JSON, `imgforge config clear` deletes it so you can start over.
+
+Dropbox shared links can include an access key (`rlkey=...`). It's stored as typed in the settings file and printed by
+`config show`, so treat the file like any other credential in your profile.

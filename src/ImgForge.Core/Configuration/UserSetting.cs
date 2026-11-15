@@ -61,10 +61,10 @@ public sealed class UserSetting
     /// <summary>True when values are file system paths (stored as full paths).</summary>
     public bool IsPath { get; }
 
-    /// <summary>Finds a setting by its command-line name (case-insensitive).</summary>
+    /// <summary>Finds a setting by its command-line name.</summary>
     /// <exception cref="ArgumentException">No setting has that name.</exception>
     public static UserSetting Find(string name) =>
-        All.FirstOrDefault(s => string.Equals(s.Name, name?.Trim(), StringComparison.OrdinalIgnoreCase))
+        All.FirstOrDefault(s => s.Name == name)
         ?? throw new ArgumentException(
             $"Unknown setting \"{name}\". Valid settings: {string.Join(", ", All.Select(s => s.Name))}.");
 
@@ -87,6 +87,32 @@ public sealed class UserSetting
         if (string.IsNullOrWhiteSpace(value))
             throw new ArgumentException($"A value for {Name} can't be empty.");
         return _normalize(value.Trim());
+    }
+
+    /// <summary>
+    /// True when <paramref name="value"/> (as typed by the user) refers to the stored value <paramref name="stored"/>:
+    /// the two match as typed, or after normalizing both. Values edited into the file by hand (e.g. <c>~/x</c>, a
+    /// trailing slash, or a value that's no longer valid) can still be matched.
+    /// </summary>
+    public bool Matches(string stored, string value)
+    {
+        value = value.Trim();
+        if (Comparer.Equals(stored.Trim(), value))
+            return true;
+        var normalized = TryNormalize(value);
+        return normalized is not null && Comparer.Equals(TryNormalize(stored) ?? stored, normalized);
+    }
+
+    private string? TryNormalize(string value)
+    {
+        try
+        {
+            return Normalize(value);
+        }
+        catch (ArgumentException)
+        {
+            return null;
+        }
     }
 
     /// <summary>Compares stored values: paths case-insensitively on Windows and macOS, everything else exactly.</summary>

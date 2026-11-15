@@ -60,9 +60,25 @@ adds the settings store and CLI that they will read from.
 
 ## Phase 5 — Independent review
 
-- [ ] Separate agent reviews full diff (correctness, coverage, security, performance, accessibility)
-- [ ] Address significant findings (record any skipped ones here)
+- [x] Separate agent reviews full diff (correctness, coverage, security, performance, accessibility).
+      No blocking defects; build/tests passed; file handling, null/malformed JSON, unknown properties, `~` expansion,
+      and OS-specific path comparison checked.
+- [x] Address significant findings:
+  - Fixed: `remove` couldn't delete hand-edited values (`~/x`, trailing slash, invalid Dropbox value). It now matches
+    the value as typed or after normalizing both sides (`UserSetting.Matches`), with tests.
+  - Fixed: `UserSetting.Find` claimed case-insensitive lookup the CLI (`FromAmong`) doesn't allow; now exact.
+  - Fixed: help showed the full `<a|b|c>` choice list in every command row and a long `add` description; the argument
+    now has `HelpName = "setting"` and the settings are listed once in `config --help`.
+  - Fixed: help hard-coded the Unix `~/` path; it now says "in your user profile folder" and points to `config path`.
+  - Fixed: docs note that Dropbox links may carry an `rlkey` access key stored and shown as typed.
+  - Fixed: a help test compared a `HashSet` to an ordered list; now `Assert.Equivalent`.
+  - Not changed: the `config` command list shows `clear <setting>` without brackets — that's how System.CommandLine
+    beta4 renders an optional argument there; `config clear --help` shows `[<setting>]`.
+  - Not changed: stricter Dropbox URL validation (https only, Dropbox host) — left to #42, which knows what URLs work.
+  - Not changed: concurrent `config add` runs can lose an update (no file lock); acceptable for an interactive CLI,
+    and writes are atomic so the file is never corrupted.
+  - Not changed: `config show` prints a `Settings file:` line before the JSON; `config path` gives the path alone.
 
 ## Phase 6 — Verification
 
-- [ ] `dotnet BuildTestFormat.cs` clean
+- [x] `dotnet BuildTestFormat.cs` clean (build OK, 438 tests passed, no format changes)
