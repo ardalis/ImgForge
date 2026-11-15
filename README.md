@@ -174,9 +174,19 @@ imgforge generate --template blog --title "My Post" --bg random:local --format b
 
 **Dropbox (and other synced folders):** ImgForge can't read Dropbox folders over the web. To use photos stored in
 Dropbox, sync the folder with the Dropbox desktop app and add its local path as an image folder, e.g.
-`imgforge config add image-directories ~/Dropbox/backgrounds`. Whether online-only (download-on-demand) files work, and
-whether only the chosen photo gets downloaded, is still being checked in
-[#47](https://github.com/ardalis/ImgForge/issues/47); until then, mark the folder as available offline to be safe.
+`imgforge config add image-directories ~/Dropbox/backgrounds` (on macOS the folder is usually under
+`~/Library/CloudStorage/Dropbox`).
+
+Online-only (download-on-demand) files work too, in Dropbox and in similar OneDrive folders and iCloud Drive folders
+(iCloud Drive needs macOS 14 or later; earlier versions hide evicted files behind `.icloud` stubs, which are skipped):
+
+- Searching the folders reads only file names, sizes, and attributes, so it doesn't download anything. Online-only
+  subfolders are searched too; links to other folders aren't followed.
+- Usually only the chosen photo is downloaded. ImgForge reads it once before resizing it, which makes the sync app
+  download it. If that photo can't be read or isn't a valid image, another is tried (up to three in all).
+- The download has 60 seconds. If it takes longer (say, a large photo on a slow connection), the error says so. Make
+  the folder available offline, or try again.
+- Linux Dropbox has no online-only mode, so its files are always local.
 
 #### Unsplash (optional API key)
 

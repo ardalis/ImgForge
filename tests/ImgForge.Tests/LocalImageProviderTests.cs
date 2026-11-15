@@ -212,6 +212,228 @@ public class LocalImageProviderTests : IDisposable
         Assert.False(File.Exists(opts.Out));
     }
 
+    [Fact]
+    public void ShouldRecurseInto_PlainFolder_IsSearched()
+    {
+        var a = Folder("a");
+
+        Assert.True(LocalImageProvider.ShouldRecurseInto(FileAttributes.Directory, a));
+    }
+
+    [Fact]
+    public void ShouldRecurseInto_ReparsePointFolderThatIsNotALink_IsSearched()
+    {
+        // Windows cloud placeholder folders (Dropbox, OneDrive online-only) are reparse points without a link target.
+        var a = Folder("cloud");
+
+        Assert.True(LocalImageProvider.ShouldRecurseInto(FileAttributes.Directory | FileAttributes.ReparsePoint, a));
+    }
+
+    [Fact]
+    public void ShouldRecurseInto_LinkToFolder_IsNotFollowed()
+    {
+        var target = Folder("target");
+        var link = Path.Combine(_root, "link");
+        if (!TryCreateLink(() => Directory.CreateSymbolicLink(link, target)))
+            return;
+
+        Assert.False(LocalImageProvider.ShouldRecurseInto(new DirectoryInfo(link).Attributes, link));
+    }
+
+    [Theory]
+    [InlineData(0x9000001Au, false)] // IO_REPARSE_TAG_CLOUD (Dropbox / OneDrive placeholders)
+    [InlineData(0x9000301Au, false)] // IO_REPARSE_TAG_CLOUD_3
+    [InlineData(0x9000001Cu, false)] // IO_REPARSE_TAG_PROJFS
+    [InlineData(0x80000021u, false)] // IO_REPARSE_TAG_ONEDRIVE
+    [InlineData(0x80000013u, false)] // IO_REPARSE_TAG_DEDUP
+    [InlineData(0xA000000Cu, true)] // IO_REPARSE_TAG_SYMLINK
+    [InlineData(0xA0000003u, true)] // IO_REPARSE_TAG_MOUNT_POINT (junction)
+    [InlineData(0xA000001Du, true)] // IO_REPARSE_TAG_LX_SYMLINK (WSL)
+    [InlineData(0xA0000027u, true)] // IO_REPARSE_TAG_WCI_LINK
+    public void IsNameSurrogate_LinksOnly(uint tag, bool isLink)
+    {
+        Assert.Equal(isLink, WindowsReparsePoints.IsNameSurrogate(tag));
+    }
+
+    [Fact]
+    public void ShouldRecurseInto_JunctionOnWindows_IsNotFollowed()
+    {
+        if (!OperatingSystem.IsWindows())
+            return;
+        var target = Folder("target");
+        var junction = Path.Combine(_root, "junction");
+        using (var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(
+            "cmd.exe", $"/c mklink /J \"{junction}\" \"{target}\"")
+        { UseShellExecute = false, CreateNoWindow = true })!)
+            process.WaitForExit();
+        if (!Directory.Exists(junction))
+            return;
+
+        Assert.False(LocalImageProvider.ShouldRecurseInto(new DirectoryInfo(junction).Attributes, junction));
+    }
+
+    [Fact]
+    public void ReadTimeout_MustBePositiveAndFinite()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => new LocalImageProvider([]) { ReadTimeout = TimeSpan.Zero });
+        Assert.Throws<ArgumentOutOfRangeException>(() => new LocalImageProvider([]) { ReadTimeout = Timeout.InfiniteTimeSpan });
+        Assert.Throws<ArgumentOutOfRangeException>(() => new LocalImageProvider([]) { ReadTimeout = TimeSpan.MaxValue });
+    }
+
+    [Theory]
+    [InlineData(FileAttributes.Offline)]
+    [InlineData((FileAttributes)0x00400000)] // FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS (online-only cloud file)
+    [InlineData((FileAttributes)0x00040000)] // FILE_ATTRIBUTE_RECALL_ON_OPEN
+    [InlineData((FileAttributes)0x00100000)] // FILE_ATTRIBUTE_UNPINNED ("free up space")
+    [InlineData(FileAttributes.SparseFile)]
+    [InlineData(FileAttributes.ReparsePoint)]
+    public void SearchOptions_DoNotSkipOnlineOnlyCloudFileAttributes(FileAttributes attribute)
+    {
+        Assert.Equal(0, (int)(LocalImageProvider.SearchOptions.AttributesToSkip & attribute));
+    }
+
+    [Fact]
+    public async Task FetchAsync_ReadsOnlyTheChosenFileBeforeResizingIt()
+    {
+        var a = Folder("a");
+        for (var i = 0; i < 10; i++)
+            Image(a, $"{i}.jpg");
+        var events = new List<string>();
+        var resizer = new RecordingResizer { OnCall = path => events.Add($"resize {path}") };
+        var provider = new LocalImageProvider([a], resizer, new Random(3))
+        {
+            ReadFile = (path, _) =>
+            {
+                events.Add($"read {path}");
+                return Task.CompletedTask;
+            }
+        };
+
+        await provider.FetchAsync(100, 100, CancellationToken.None);
+
+        var chosen = Assert.Single(resizer.Calls).Path;
+        Assert.Equal([$"read {chosen}", $"resize {chosen}"], events);
+    }
+
+    [Fact]
+    public async Task FetchAsync_ReadTimesOut_FailsWithOnlineOnlyHintWithoutResizingOrRetrying()
+    {
+        var a = Folder("a");
+        Image(a, "1.jpg");
+        Image(a, "2.jpg");
+        var reads = 0;
+        var resizer = new RecordingResizer();
+        var provider = new LocalImageProvider([a], resizer)
+        {
+            ReadTimeout = TimeSpan.FromMilliseconds(100),
+            // Ignores cancellation, like a read blocked on a download: the provider must stop waiting anyway.
+            ReadFile = (_, _) =>
+            {
+                Interlocked.Increment(ref reads);
+                return Task.Delay(Timeout.Infinite, CancellationToken.None);
+            }
+        };
+
+        var ex = await Assert.ThrowsAsync<RandomBackgroundProviderException>(
+            () => provider.FetchAsync(100, 100, CancellationToken.None));
+
+        Assert.Contains("could not be read within 0.1 seconds", ex.Message);
+        Assert.Contains("online-only file", ex.Message);
+        Assert.Equal(1, reads);
+        Assert.Empty(resizer.Calls);
+    }
+
+    [Fact]
+    public async Task FetchAsync_CallerCancelsDuringRead_ThrowsOperationCanceled()
+    {
+        var a = Folder("a");
+        Image(a, "1.jpg");
+        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(100));
+        var provider = new LocalImageProvider([a], new RecordingResizer())
+        {
+            ReadFile = (_, token) => Task.Delay(Timeout.Infinite, token)
+        };
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => provider.FetchAsync(100, 100, cts.Token));
+    }
+
+    [Fact]
+    public async Task FetchAsync_ChosenFileCannotBeRead_TriesAnother()
+    {
+        var a = Folder("a");
+        var bad = Image(a, "bad.jpg");
+        var good = Image(a, "good.jpg");
+        var reads = new List<string>();
+        var resizer = new RecordingResizer();
+        var provider = new LocalImageProvider([a], resizer, new FixedRandom(0))
+        {
+            ReadFile = (path, _) =>
+            {
+                reads.Add(path);
+                return path == bad
+                    ? Task.FromException(new IOException("The cloud operation was unsuccessful."))
+                    : Task.CompletedTask;
+            }
+        };
+
+        await provider.FetchAsync(100, 100, CancellationToken.None);
+
+        Assert.Equal([bad, good], reads); // "bad.jpg" sorts first, so index 0 picks it, then the only one left.
+        Assert.Equal(good, Assert.Single(resizer.Calls).Path);
+    }
+
+    [Fact]
+    public async Task FetchAsync_NoFileCanBeRead_ThrowsReadReason()
+    {
+        var a = Folder("a");
+        Image(a, "1.jpg");
+        var provider = new LocalImageProvider([a], new RecordingResizer())
+        {
+            ReadFile = (_, _) => Task.FromException(new IOException("The cloud operation was unsuccessful."))
+        };
+
+        var ex = await Assert.ThrowsAsync<RandomBackgroundProviderException>(
+            () => provider.FetchAsync(100, 100, CancellationToken.None));
+
+        Assert.EndsWith("couldn't be read (The cloud operation was unsuccessful)", ex.Message);
+    }
+
+    [Fact]
+    public async Task ReadWholeFileAsync_ReadsARealFile()
+    {
+        var path = Path.Combine(Folder("a"), "photo.jpg");
+        File.WriteAllBytes(path, new byte[200_000]);
+
+        await LocalImageProvider.ReadWholeFileAsync(path, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task ReadWholeFileAsync_MissingFile_ThrowsIOException()
+    {
+        await Assert.ThrowsAnyAsync<IOException>(
+            () => LocalImageProvider.ReadWholeFileAsync(Path.Combine(_root, "gone.jpg"), CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task Resolver_SlowReadWithinReadTimeout_IsNotCutOffByDownloadTimeout()
+    {
+        Image(Folder("a"), "photo.jpg");
+        var provider = new LocalImageProvider([_root], new RecordingResizer())
+        {
+            ReadTimeout = TimeSpan.FromSeconds(10),
+            ReadFile = (_, token) => Task.Delay(TimeSpan.FromMilliseconds(500), token) // a slow on-demand download
+        };
+        var resolver = new RandomBackgroundResolver(provider)
+        {
+            DownloadTimeout = TimeSpan.FromMilliseconds(100),
+            TempDirectory = Folder("out")
+        };
+
+        var resolved = await resolver.ResolveToFileAsync(100, 100);
+
+        Assert.Equal(LocalImageProvider.ProviderName, resolved.ProviderName);
+    }
+
     private string Folder(string name) => Directory.CreateDirectory(Path.Combine(_root, name)).FullName;
 
     private static string Image(string folder, string relativePath)
@@ -241,6 +463,12 @@ public class LocalImageProviderTests : IDisposable
             Directory.Delete(_root, recursive: true);
     }
 
+    /// <summary>Always returns <c>value</c> (clamped to the range).</summary>
+    private sealed class FixedRandom(int value) : Random
+    {
+        public override int Next(int maxValue) => Math.Min(value, maxValue - 1);
+    }
+
     private sealed class RecordingResizer : IImageResizer
     {
         public static readonly byte[] Output = [0xFF, 0xD8, 0xFF, 0xE0, 7];
@@ -249,9 +477,12 @@ public class LocalImageProviderTests : IDisposable
 
         public Func<string, bool> Fails { get; init; } = _ => false;
 
+        public Action<string> OnCall { get; init; } = _ => { };
+
         public Task<RandomBackgroundImage> ResizeAsync(string path, int width, int height, CancellationToken cancellationToken)
         {
             Calls.Add((path, width, height));
+            OnCall(path);
             if (Fails(path))
                 throw new RandomBackgroundProviderException($"'{path}' couldn't be read as an image");
             return Task.FromResult(new RandomBackgroundImage(Output, "image/jpeg"));

@@ -218,14 +218,17 @@ public class RandomBackgroundResolverTests
         try
         {
             File.WriteAllBytes(Path.Combine(dir, "a.jpg"), [1]);
-            var resolver = new RandomBackgroundResolver(new LocalImageProvider([dir], new HangingResizer()))
+            var provider = new LocalImageProvider([dir], new HangingResizer())
             {
-                DownloadTimeout = TimeSpan.FromMilliseconds(200)
+                ReadTimeout = TimeSpan.FromMilliseconds(100),
+                ReadFile = (_, _) => Task.CompletedTask
             };
+            var resolver = new RandomBackgroundResolver(provider) { DownloadTimeout = TimeSpan.FromMilliseconds(200) };
 
             var ex = await Assert.ThrowsAsync<ImageLoadException>(() => resolver.ResolveToFileAsync(100, 100));
 
-            Assert.Contains("local image folders (used by --bg random): the image could not be found and resized within 0.2 seconds.", ex.Message);
+            // The local provider's limit is DownloadTimeout plus its ReadTimeout.
+            Assert.Contains("local image folders (used by --bg random): the image could not be found and resized within 0.3 seconds.", ex.Message);
         }
         finally
         {

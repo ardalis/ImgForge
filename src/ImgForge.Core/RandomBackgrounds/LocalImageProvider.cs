@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.IO.Enumeration;
 
 namespace ImgForge.Core.RandomBackgrounds;
@@ -23,12 +24,17 @@ internal sealed class LocalImageProvider : IRandomBackgroundProvider
     /// <summary>How many different images to try when one can't be resized (e.g. a corrupt or misnamed file).</summary>
     internal const int MaxAttempts = 3;
 
+    /// <summary>The default <see cref="ReadTimeout"/>.</summary>
+    internal static readonly TimeSpan DefaultReadTimeout = TimeSpan.FromSeconds(60);
+
     /// <summary>
     /// Recursive, skipping folders and files that can't be read, hidden or system entries, and absurdly deep trees.
-    /// Symbolic links (and junctions) to folders aren't followed (see <see cref="Enumerate"/>), so a link loop can't
-    /// repeat images or make the search run forever.
+    /// Symbolic links (and junctions) to folders aren't followed (see <see cref="ShouldRecurseInto"/>), so a link loop
+    /// can't repeat images or make the search run forever. Online-only cloud files and folders (Dropbox, OneDrive,
+    /// iCloud) aren't hidden or system entries, so they're searched; the search reads only metadata (names, sizes,
+    /// attributes), so it doesn't download them.
     /// </summary>
-    private static readonly EnumerationOptions SearchOptions = new()
+    internal static readonly EnumerationOptions SearchOptions = new()
     {
         RecurseSubdirectories = true,
         IgnoreInaccessible = true,
@@ -54,6 +60,27 @@ internal sealed class LocalImageProvider : IRandomBackgroundProvider
 
     public string Name => ProviderName;
 
+    /// <summary>
+    /// How long reading the chosen file may take. The file is read once before it's resized, so an online-only file in a
+    /// cloud folder (e.g. Dropbox) is downloaded on demand here, with its own time limit, instead of inside Chromium.
+    /// </summary>
+    public TimeSpan ReadTimeout
+    {
+        get;
+        init
+        {
+            ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(value, TimeSpan.Zero);
+            ArgumentOutOfRangeException.ThrowIfGreaterThan(value, MaxReadTimeout);
+            field = value;
+        }
+    } = DefaultReadTimeout;
+
+    /// <summary>The longest allowed <see cref="ReadTimeout"/>.</summary>
+    internal static readonly TimeSpan MaxReadTimeout = TimeSpan.FromHours(1);
+
+    /// <summary>Reads the whole file at the given path; replaceable in tests. See <see cref="ReadWholeFileAsync"/>.</summary>
+    internal Func<string, CancellationToken, Task> ReadFile { get; init; } = ReadWholeFileAsync;
+
     /// <summary>The folders searched, in order.</summary>
     internal IReadOnlyList<string> Directories => _directories;
 
@@ -75,9 +102,23 @@ internal sealed class LocalImageProvider : IRandomBackgroundProvider
         for (var attempt = 0; attempt < MaxAttempts && images.Count > 0; attempt++)
         {
             var index = _random.Next(images.Count);
+            var path = images[index];
             try
             {
-                return await _resizer.ResizeAsync(images[index], width, height, cancellationToken);
+                await ReadChosenFileAsync(path, cancellationToken);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // e.g. the file went away, or the sync app couldn't download it: try another.
+                lastFailure = new RandomBackgroundProviderException(
+                    $"'{path}' couldn't be read ({ex.Message.TrimEnd('.', ' ')})");
+                images.RemoveAt(index);
+                continue;
+            }
+
+            try
+            {
+                return await _resizer.ResizeAsync(path, width, height, cancellationToken);
             }
             catch (RandomBackgroundProviderException ex)
             {
@@ -87,6 +128,54 @@ internal sealed class LocalImageProvider : IRandomBackgroundProvider
         }
 
         throw lastFailure!;
+    }
+
+    /// <summary>
+    /// Reads <paramref name="path"/> within <see cref="ReadTimeout"/>, so an online-only file is downloaded now.
+    /// A timeout fails the provider (without trying other images, which would likely be just as slow).
+    /// </summary>
+    private async Task ReadChosenFileAsync(string path, CancellationToken cancellationToken)
+    {
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(ReadTimeout);
+        try
+        {
+            // WaitAsync: a read blocked on a download may not notice cancellation (e.g. on macOS), so stop waiting for it.
+            await ReadFile(path, timeout.Token).WaitAsync(timeout.Token);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            throw new RandomBackgroundProviderException(
+                $"'{path}' could not be read within {HttpImageDownloader.FormatSeconds(ReadTimeout)}; if it's an " +
+                "online-only file in a cloud folder (e.g. Dropbox), it may still be downloading: make the folder " +
+                "available offline, or try again on a faster connection");
+        }
+    }
+
+    /// <summary>
+    /// Reads the file from start to end (at most <see cref="HttpImageDownloader.MaxImageBytes"/>) and discards the
+    /// data. For an online-only cloud file, this is what downloads it.
+    /// </summary>
+    internal static async Task ReadWholeFileAsync(string path, CancellationToken cancellationToken)
+    {
+        const int chunkSize = 81920;
+        var buffer = ArrayPool<byte>.Shared.Rent(chunkSize);
+        try
+        {
+            await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read,
+                FileShare.ReadWrite | FileShare.Delete, bufferSize: 0, FileOptions.Asynchronous | FileOptions.SequentialScan);
+            long total = 0;
+            int read;
+            while (total < HttpImageDownloader.MaxImageBytes &&
+                (read = await stream.ReadAsync(buffer.AsMemory(0, chunkSize), cancellationToken)) > 0)
+            {
+                total += read;
+            }
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
+        }
     }
 
     /// <summary>
@@ -146,8 +235,32 @@ internal sealed class LocalImageProvider : IRandomBackgroundProvider
         new(directory, (ref FileSystemEntry entry) => (FileInfo)entry.ToFileSystemInfo(), SearchOptions)
         {
             ShouldIncludePredicate = (ref FileSystemEntry entry) => !entry.IsDirectory,
-            ShouldRecursePredicate = (ref FileSystemEntry entry) => (entry.Attributes & FileAttributes.ReparsePoint) == 0,
+            ShouldRecursePredicate = (ref FileSystemEntry entry) =>
+                (entry.Attributes & FileAttributes.ReparsePoint) == 0 || ShouldRecurseInto(entry.Attributes, entry.ToFullPath()),
         };
+
+    /// <summary>
+    /// True for a folder that should be searched: any folder except a link to another folder (a symbolic link,
+    /// junction, or WSL symlink). Windows cloud folders (Dropbox, OneDrive online-only placeholders) can be reparse
+    /// points that aren't links, so they're searched. Only metadata is read, so nothing is downloaded. A reparse point
+    /// whose kind can't be read isn't searched.
+    /// </summary>
+    internal static bool ShouldRecurseInto(FileAttributes attributes, string fullPath)
+    {
+        if ((attributes & FileAttributes.ReparsePoint) == 0)
+            return true;
+        if (OperatingSystem.IsWindows())
+            return WindowsReparsePoints.GetReparseTag(fullPath) is { } tag && !WindowsReparsePoints.IsNameSurrogate(tag);
+        try
+        {
+            // On Linux and macOS a reparse point is a symbolic link.
+            return new DirectoryInfo(fullPath).LinkTarget is null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
 
     /// <summary>
     /// True when the file (or, for a link, the file it points to) exists, isn't empty, and is at most
@@ -157,7 +270,11 @@ internal sealed class LocalImageProvider : IRandomBackgroundProvider
     {
         try
         {
-            var target = file.LinkTarget is null ? file : file.ResolveLinkTarget(returnFinalTarget: true) as FileInfo;
+            // Only reparse points can be links; skipping the check for other files avoids opening each one. (On Windows,
+            // online-only cloud files are reparse points, so each costs one metadata-only open.) Length comes from the
+            // folder listing, and online-only cloud files report their real size, so nothing is downloaded.
+            var isLink = (file.Attributes & FileAttributes.ReparsePoint) != 0 && file.LinkTarget is not null;
+            var target = isLink ? file.ResolveLinkTarget(returnFinalTarget: true) as FileInfo : file;
             return target is { Exists: true, Length: > 0 and <= HttpImageDownloader.MaxImageBytes };
         }
         catch (IOException)
